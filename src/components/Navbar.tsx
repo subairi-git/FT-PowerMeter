@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Activity,
   BarChart3,
@@ -93,6 +93,10 @@ export const Navbar: React.FC<NavbarProps> = ({
 
           {/* Quick status & Actions */}
           <div className="flex items-center gap-2 sm:gap-3">
+            <button onClick={() => setDarkMode(v => !v)} title={darkMode ? 'Gunakan background putih' : 'Gunakan background hitam'} className="pow-btn pow-btn-soft">
+              {darkMode ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+              <span className="hidden md:inline">{darkMode ? 'Terang' : 'Gelap'}</span>
+            </button>
             {/* Simulation toggle button */}
             <button
               onClick={onToggleSimulation}
