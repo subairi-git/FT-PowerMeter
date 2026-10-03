@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { BarChart3, CalendarDays, Download, Radio, Search, Zap } from 'lucide-react';
-import { PowerMeterData } from '../types/powermeter';\nimport { mqttService } from '../services/mqttService';
+import { PowerMeterData } from '../types/powermeter';\nimport { realtimeBuffer } from '../services/realtimeBuffer';
 
 type Point = PowerMeterData & { at: string };
 type Series = { key: keyof PowerMeterData; label: string; color: string; divisor?: number };
@@ -32,7 +32,7 @@ function LineChart({title, unit, data, series}:{title:string;unit:string;data:Po
 export function MonitoringCharts({liveData}:{liveData:PowerMeterData}) {
   const now=new Date(); const startDefault=new Date(now); startDefault.setHours(0,0,0,0);
   const [mode,setMode]=useState<'realtime'|'history'>('realtime');
-  const [live,setLive]=useState<Point[]>(() => mqttService.getRealtimeBuffer());
+  const [live,setLive]=useState<Point[]>(() => realtimeBuffer.getAll());
   const [history,setHistory]=useState<Point[]>([]);
   const [start,setStart]=useState(localInput(startDefault));
   const [end,setEnd]=useState(localInput(now));
