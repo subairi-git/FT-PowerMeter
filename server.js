@@ -160,10 +160,11 @@ async function restoreEnergyState() {
       phaseRKWh: Number(last.energyTodayRKWh || 0),
       phaseSKWh: Number(last.energyTodaySKWh || 0),
       phaseTKWh: Number(last.energyTodayTKWh || 0),
-      lastSavedAt: last.savedAt ? new Date(last.savedAt) : null,
+      lastSampleAt: null,
+      lastSample: null,
     };
   } else {
-    energyState = { dateKey: today, totalKWh: 0, phaseRKWh: 0, phaseSKWh: 0, phaseTKWh: 0, lastSavedAt: null };
+    energyState = { dateKey: today, totalKWh: 0, phaseRKWh: 0, phaseSKWh: 0, phaseTKWh: 0, lastSampleAt: null, lastSample: null };
   }
 }
 
@@ -173,17 +174,6 @@ async function saveLatestTelemetry() {
   try {
     const now = new Date();
     const dateKey = jakartaDateKey(now);
-    if (energyState.dateKey !== dateKey) {
-      energyState = { dateKey, totalKWh: 0, phaseRKWh: 0, phaseSKWh: 0, phaseTKWh: 0, lastSavedAt: null };
-    }
-    if (energyState.lastSavedAt) {
-      const hours = Math.min(Math.max((now - energyState.lastSavedAt) / 3600000, 0), 0.25);
-      energyState.totalKWh += (Number(latestData.activePower) || 0) / 1000 * hours;
-      energyState.phaseRKWh += (Number(latestData.activePowerA) || 0) / 1000 * hours;
-      energyState.phaseSKWh += (Number(latestData.activePowerB) || 0) / 1000 * hours;
-      energyState.phaseTKWh += (Number(latestData.activePowerC) || 0) / 1000 * hours;
-    }
-    energyState.lastSavedAt = now;
     const document = {
       ...latestData,
       receivedAt: lastMqttAt || now,
@@ -252,7 +242,7 @@ app.get('/api/energy-today', (_req, res) => {
     phaseR: Number(energyState.phaseRKWh.toFixed(6)),
     phaseS: Number(energyState.phaseSKWh.toFixed(6)),
     phaseT: Number(energyState.phaseTKWh.toFixed(6)),
-    lastSavedAt: energyState.lastSavedAt,
+    lastSampleAt: energyState.lastSampleAt,
   });
 });
 
