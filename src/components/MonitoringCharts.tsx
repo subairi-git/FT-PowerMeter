@@ -1,0 +1,88 @@
+import React, { useEffect, useMemo, useState } from 'react';
+import { BarChart3, CalendarDays, Download, Radio, Search, Zap } from 'lucide-react';
+import { PowerMeterData } from '../types/powermeter';
+
+type Point = PowerMeterData & { at: string };
+type Series = { key: keyof PowerMeterData; label: string; color: string; divisor?: number };
+
+const colors = ['#22c55e','#f43f5e','#f59e0b','#3b82f6'];
+const pad = (n:number) => String(n).padStart(2,'0');
+const localInput = (d:Date) => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+
+function LineChart({title, unit, data, series}:{title:string;unit:string;data:Point[];series:Series[]}) {
+  const width=760, height=220, left=52, right=16, top=18, bottom=38;
+  const vals=data.flatMap(p=>series.map(s=>Number(p[s.key]||0)/(s.divisor||1)));
+  let min=Math.min(...vals,0), max=Math.max(...vals,1);
+  if(title.includes('Tegangan') && vals.length){ min=Math.floor(Math.min(...vals)-5); max=Math.ceil(Math.max(...vals)+5); }
+  if(title.includes('Cos')) { min=Math.min(.75,Math.min(...vals)); max=1.02; }
+  const range=max-min||1;
+  const x=(i:number)=>left+(i/Math.max(data.length-1,1))*(width-left-right);
+  const y=(v:number)=>top+(max-v)/range*(height-top-bottom);
+  return <div className="pow-card p-4">
+    <div className="flex items-center justify-between mb-2"><h3 className="font-bold text-sm">{title}</h3><span className="text-[11px] text-slate-400">{unit}</span></div>
+    <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-52">
+      {[0,.25,.5,.75,1].map((q,i)=>{const yy=top+q*(height-top-bottom);const v=max-q*range;return <g key={i}><line x1={left} y1={yy} x2={width-right} y2={yy} stroke="currentColor" opacity=".09"/><text x={left-7} y={yy+4} textAnchor="end" fontSize="10" fill="currentColor" opacity=".55">{v.toFixed(unit==='kW'?1:unit==='Cos φ'?2:0)}</text></g>})}
+      {series.map((s,si)=>{const pts=data.map((p,i)=>`${x(i)},${y(Number(p[s.key]||0)/(s.divisor||1))}`).join(' ');return <polyline key={s.label} points={pts} fill="none" stroke={s.color} strokeWidth="2.4" strokeLinejoin="round" strokeLinecap="round"/>})}
+      {data.length>0 && <><text x={left} y={height-10} fontSize="10" fill="currentColor" opacity=".55">{new Date(data[0].at).toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'})}</text><text x={width-right} y={height-10} textAnchor="end" fontSize="10" fill="currentColor" opacity=".55">{new Date(data[data.length-1].at).toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'})}</text></>}
+    </svg>
+    <div className="flex flex-wrap justify-center gap-4 text-[11px]">{series.map(s=><span key={s.label} className="flex items-center gap-1.5"><i className="w-2.5 h-2.5 rounded-full" style={{background:s.color}}/>{s.label}</span>)}</div>
+  </div>
+}
+
+export function MonitoringCharts({liveData}:{liveData:PowerMeterData}) {
+  const now=new Date(); const startDefault=new Date(now); startDefault.setHours(0,0,0,0);
+  const [mode,setMode]=useState<'realtime'|'history'>('realtime');
+  const [live,setLive]=useState<Point[]>([]);
+  const [history,setHistory]=useState<Point[]>([]);
+  const [start,setStart]=useState(localInput(startDefault));
+  const [end,setEnd]=useState(localInput(now));
+  const [loading,setLoading]=useState(false); const [error,setError]=useState('');
+  useEffect(()=>{setLive(prev=>[...prev,{...liveData,at:new Date().toISOString()}].slice(-120))},[liveData]);
+  const data=mode==='realtime'?live:history;
+
+  async function loadHistory(){
+    setLoading(true);setError('');
+    try{
+      const qs=new URLSearchParams({start:new Date(start).toISOString(),end:new Date(end).toISOString(),limit:'10000'});
+      const res=await fetch('/api/history?'+qs); const json=await res.json();
+      if(!res.ok||!json.success) throw new Error(json.message||'Gagal mengambil histori');
+      setHistory(json.data.map((p:any)=>({...p,at:p.savedAt||p.receivedAt}))); setMode('history');
+    }catch(e:any){setError(e.message)}finally{setLoading(false)}
+  }
+  function downloadCsv(){
+    const headers=['Waktu','Daya Total (kW)','Daya R (kW)','Daya S (kW)','Daya T (kW)','Arus R (A)','Arus S (A)','Arus T (A)','Tegangan R (V)','Tegangan S (V)','Tegangan T (V)','CosPhi Total','CosPhi R','CosPhi S','CosPhi T','Frekuensi (Hz)'];
+    const rows=history.map(p=>[new Date(p.at).toLocaleString('id-ID'),p.activePower/1000,p.activePowerA/1000,p.activePowerB/1000,p.activePowerC/1000,p.currentA,p.currentB,p.currentC,p.voltageA,p.voltageB,p.voltageC,p.powerFactor,p.powerFactorA,p.powerFactorB,p.powerFactorC,p.frequency]);
+    const csv='\uFEFF'+[headers,...rows].map(r=>r.join(',')).join('\n'); const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));a.download=`powmon_${start.slice(0,10)}_${end.slice(0,10)}.csv`;a.click();URL.revokeObjectURL(a.href);
+  }
+  const latest=data[data.length-1]||({...liveData,at:new Date().toISOString()} as Point);
+  const metrics=useMemo(()=>[
+    ['Daya Total',(latest.activePower/1000).toFixed(3),'kW'],
+    ['Daya R',(latest.activePowerA/1000).toFixed(3),'kW'],['Daya S',(latest.activePowerB/1000).toFixed(3),'kW'],['Daya T',(latest.activePowerC/1000).toFixed(3),'kW'],
+    ['Arus R',latest.currentA.toFixed(2),'A'],['Arus S',latest.currentB.toFixed(2),'A'],['Arus T',latest.currentC.toFixed(2),'A'],
+    ['Tegangan R',latest.voltageA.toFixed(1),'V'],['Tegangan S',latest.voltageB.toFixed(1),'V'],['Tegangan T',latest.voltageC.toFixed(1),'V'],['Cos φ',latest.powerFactor.toFixed(3),'']
+  ],[latest]);
+  return <div className="space-y-5">
+    <section className="pow-card p-4 sm:p-5">
+      <div className="flex flex-col xl:flex-row xl:items-end justify-between gap-4">
+        <div><div className="flex items-center gap-2 text-blue-500"><BarChart3 className="w-5 h-5"/><span className="font-bold">Monitoring Grafik</span></div><p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Realtime MQTT atau histori MongoDB tersimpan setiap 5 menit.</p></div>
+        <div className="flex flex-wrap items-end gap-2">
+          <button onClick={()=>setMode('realtime')} className={`pow-btn ${mode==='realtime'?'pow-btn-primary':'pow-btn-soft'}`}><Radio className="w-4 h-4"/>Realtime</button>
+          <label className="text-[11px]">Dari<input type="datetime-local" value={start} onChange={e=>setStart(e.target.value)} className="pow-input block mt-1"/></label>
+          <label className="text-[11px]">Sampai<input type="datetime-local" value={end} onChange={e=>setEnd(e.target.value)} className="pow-input block mt-1"/></label>
+          <button onClick={loadHistory} className="pow-btn pow-btn-primary"><Search className="w-4 h-4"/>{loading?'Memuat...':'Tampilkan'}</button>
+          <button onClick={downloadCsv} disabled={!history.length} className="pow-btn bg-emerald-600 text-white disabled:opacity-40"><Download className="w-4 h-4"/>Download CSV</button>
+        </div>
+      </div>{error&&<p className="mt-3 text-sm text-rose-500">{error}</p>}
+    </section>
+    <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-6 gap-3">{metrics.map((m,i)=><div key={m[0]} className="pow-card p-3 border-t-2" style={{borderTopColor:colors[i%4]}}><div className="text-[11px] text-slate-500 dark:text-slate-400">{m[0]}</div><div className="text-xl font-extrabold mt-1">{m[1]} <span className="text-xs font-medium text-slate-400">{m[2]}</span></div></div>)}</div>
+    {!data.length?<div className="pow-card p-12 text-center text-slate-500"><Zap className="w-8 h-8 mx-auto mb-3 opacity-40"/>{mode==='realtime'?'Menunggu data MQTT realtime...':'Pilih rentang tanggal lalu klik Tampilkan.'}</div>:
+    <div className="grid xl:grid-cols-2 gap-4">
+      <LineChart title="Daya Total" unit="kW" data={data} series={[{key:'activePower',label:'Daya Total',color:colors[0],divisor:1000}]}/>
+      <LineChart title="Daya R / S / T" unit="kW" data={data} series={[{key:'activePowerA',label:'R',color:colors[1],divisor:1000},{key:'activePowerB',label:'S',color:colors[2],divisor:1000},{key:'activePowerC',label:'T',color:colors[3],divisor:1000}]}/>
+      <LineChart title="Arus R / S / T" unit="A" data={data} series={[{key:'currentA',label:'R',color:colors[1]},{key:'currentB',label:'S',color:colors[2]},{key:'currentC',label:'T',color:colors[3]}]}/>
+      <LineChart title="Tegangan R / S / T" unit="V" data={data} series={[{key:'voltageA',label:'R',color:colors[1]},{key:'voltageB',label:'S',color:colors[2]},{key:'voltageC',label:'T',color:colors[3]}]}/>
+      <LineChart title="Cos φ" unit="Cos φ" data={data} series={[{key:'powerFactor',label:'Total',color:colors[0]},{key:'powerFactorA',label:'R',color:colors[1]},{key:'powerFactorB',label:'S',color:colors[2]},{key:'powerFactorC',label:'T',color:colors[3]}]}/>
+      <LineChart title="Frekuensi" unit="Hz" data={data} series={[{key:'frequency',label:'Frekuensi',color:'#8b5cf6'}]}/>
+    </div>}
+  </div>
+}
