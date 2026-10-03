@@ -1,619 +1,110 @@
-import React, { useState, useMemo } from 'react';
-import {
-  CalendarDays,
-  Download,
-  Coins,
-  TrendingUp,
-  FileSpreadsheet,
-  Settings2,
-  Check,
-  Search,
-  Sparkles,
-  ArrowUpDown,
-  Calendar,
-  Filter,
-  Info,
-  Clock,
-  Zap,
-} from 'lucide-react';
-import { DailyPowerRecord, TaripPLN } from '../types/powermeter';
-import { formatRupiah, formatNumber, formatKWh, formatDateIndo, formatWatts } from '../utils/formatters';
+import React, { useEffect, useMemo, useState } from 'react';
+import { CalendarDays, Download, RefreshCw, Database, Zap } from 'lucide-react';
+import { PowerMeterData } from '../types/powermeter';
 
-interface MonthlyHistoryProps {
-  records: DailyPowerRecord[];
-  tariff: TaripPLN;
-  onUpdateTariff: (tariff: Partial<TaripPLN>) => void;
-  onExportCsv: (customRecords?: DailyPowerRecord[], filename?: string) => void;
-}
+type MongoPoint = PowerMeterData & { savedAt: string; receivedAt?: string };
+type DailyRow = {
+  date: string; samples: number; energyKWh: number; peakPowerW: number;
+  peakTime: string; avgPowerFactor: number; phaseA: number; phaseB: number; phaseC: number;
+};
 
-type PeriodPreset = 'pln-current' | 'pln-previous' | 'last30' | 'calendar-month' | 'custom';
+const pad=(n:number)=>String(n).padStart(2,'0');
+const localDate=(d:Date)=>`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+const fmt=(n:number,d=2)=>n.toLocaleString('id-ID',{minimumFractionDigits:d,maximumFractionDigits:d});
 
-export const MonthlyHistory: React.FC<MonthlyHistoryProps> = ({
-  records,
-  tariff,
-  onUpdateTariff,
-  onExportCsv,
-}) => {
-  const [searchTerm, setSearchTerm] = useState('');
-  const [sortField, setSortField] = useState<'date' | 'energyKWh' | 'costRp' | 'peakPowerW'>('date');
-  const [sortAsc, setSortAsc] = useState(false);
-  const [showTariffSettings, setShowTariffSettings] = useState(false);
-  const [tempTariffRate, setTempTariffRate] = useState(tariff.ratePerKWh.toString());
-  const [tempTariffName, setTempTariffName] = useState(tariff.tariffName);
-  const [isSaved, setIsSaved] = useState(false);
+export const MonthlyHistory: React.FC = () => {
+  const now=new Date();
+  const ago=new Date(now); ago.setDate(ago.getDate()-30);
+  const [start,setStart]=useState(localDate(ago));
+  const [end,setEnd]=useState(localDate(now));
+  const [points,setPoints]=useState<MongoPoint[]>([]);
+  const [loading,setLoading]=useState(false);
+  const [error,setError]=useState('');
 
-  // Period / Date Range states
-  const [periodPreset, setPeriodPreset] = useState<PeriodPreset>('pln-current');
-  const [plnCutoffDay, setPlnCutoffDay] = useState<number>(20); // Default tanggal 20 PLN
+  async function load(){
+    setLoading(true); setError('');
+    try{
+      const from=new Date(start+'T00:00:00');
+      const to=new Date(end+'T23:59:59.999');
+      const qs=new URLSearchParams({start:from.toISOString(),end:to.toISOString(),limit:'10000'});
+      const res=await fetch('/api/history?'+qs);
+      const json=await res.json();
+      if(!res.ok||!json.success) throw new Error(json.message||'Gagal mengambil histori MongoDB');
+      setPoints((json.data||[]).filter((p:any)=>p.savedAt&&typeof p.activePower==='number'));
+    }catch(e:any){setError(e.message||'Gagal mengambil histori MongoDB')}finally{setLoading(false)}
+  }
+  useEffect(()=>{load()},[]);
 
-  // Custom date pickers (default to 20th of last month to 20th of this month)
-  const [customStartDate, setCustomStartDate] = useState<string>(() => {
-    const now = new Date();
-    const currentDay = now.getDate();
-    const d = new Date(now);
-    if (currentDay < 20) {
-      d.setMonth(d.getMonth() - 1);
-    }
-    d.setDate(20);
-    return d.toISOString().split('T')[0];
-  });
-
-  const [customEndDate, setCustomEndDate] = useState<string>(() => {
-    const now = new Date();
-    const currentDay = now.getDate();
-    const d = new Date(now);
-    if (currentDay >= 20) {
-      d.setMonth(d.getMonth() + 1);
-    }
-    d.setDate(20);
-    return d.toISOString().split('T')[0];
-  });
-
-  // Calculate Start & End Date based on selected preset
-  const { effectiveStartDate, effectiveEndDate, periodLabel } = useMemo(() => {
-    const today = new Date();
-    const currentDay = today.getDate();
-    const todayStr = today.toISOString().split('T')[0];
-
-    if (periodPreset === 'pln-current') {
-      // Current PLN Cycle: Tgl 20 bulan lalu s/d tgl 20 bulan ini (atau tgl 20 bulan ini s/d tgl 20 bulan depan)
-      const start = new Date(today);
-      if (currentDay < plnCutoffDay) {
-        start.setMonth(start.getMonth() - 1);
+  const rows=useMemo<DailyRow[]>(()=>{
+    const groups=new Map<string,MongoPoint[]>();
+    points.forEach(p=>{
+      const key=localDate(new Date(p.savedAt));
+      const arr=groups.get(key)||[]; arr.push(p); groups.set(key,arr);
+    });
+    return Array.from(groups.entries()).map(([date,arr])=>{
+      arr.sort((a,b)=>+new Date(a.savedAt)-+new Date(b.savedAt));
+      let energy=0,aKwh=0,bKwh=0,cKwh=0;
+      for(let i=0;i<arr.length;i++){
+        const dt=i<arr.length-1 ? Math.min((+new Date(arr[i+1].savedAt)-+new Date(arr[i].savedAt))/3600000,0.25) : 0;
+        energy+=(arr[i].activePower||0)/1000*dt;
+        aKwh+=(arr[i].activePowerA||0)/1000*dt;
+        bKwh+=(arr[i].activePowerB||0)/1000*dt;
+        cKwh+=(arr[i].activePowerC||0)/1000*dt;
       }
-      start.setDate(plnCutoffDay);
+      const peak=arr.reduce((m,p)=>(p.activePower||0)>(m.activePower||0)?p:m,arr[0]);
+      const pf=arr.reduce((s,p)=>s+(p.powerFactor||0),0)/arr.length;
+      return {date,samples:arr.length,energyKWh:energy,peakPowerW:peak?.activePower||0,
+        peakTime:peak?new Date(peak.savedAt).toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'}):'-',
+        avgPowerFactor:pf,phaseA:aKwh,phaseB:bKwh,phaseC:cKwh};
+    }).sort((a,b)=>b.date.localeCompare(a.date));
+  },[points]);
 
-      const end = new Date(start);
-      end.setMonth(end.getMonth() + 1);
-      end.setDate(plnCutoffDay);
+  const total=rows.reduce((s,r)=>s+r.energyKWh,0);
+  const first=points.length?new Date(points[0].savedAt):null;
+  const last=points.length?new Date(points[points.length-1].savedAt):null;
 
-      const startStr = start.toISOString().split('T')[0];
-      const endStr = end.toISOString().split('T')[0];
+  function downloadCsv(){
+    const head=['Tanggal','Jumlah Snapshot','Energi Terhitung (kWh)','Peak Power (W)','Jam Peak','PF Rata-rata','Fasa R (kWh)','Fasa S (kWh)','Fasa T (kWh)'];
+    const data=rows.map(r=>[r.date,r.samples,r.energyKWh.toFixed(4),r.peakPowerW.toFixed(2),r.peakTime,r.avgPowerFactor.toFixed(4),r.phaseA.toFixed(4),r.phaseB.toFixed(4),r.phaseC.toFixed(4)]);
+    const csv='\uFEFF'+[head,...data].map(r=>r.join(',')).join('\\n');
+    const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));
+    a.download=`powmon_histori_${start}_sd_${end}.csv`;a.click();URL.revokeObjectURL(a.href);
+  }
 
-      return {
-        effectiveStartDate: startStr,
-        effectiveEndDate: endStr,
-        periodLabel: `Siklus PLN Berjalan (${formatDateIndo(startStr)} - ${formatDateIndo(endStr)})`,
-      };
-    }
-
-    if (periodPreset === 'pln-previous') {
-      // Previous PLN Cycle: 2 bulan lalu ke 1 bulan lalu
-      const start = new Date(today);
-      if (currentDay < plnCutoffDay) {
-        start.setMonth(start.getMonth() - 2);
-      } else {
-        start.setMonth(start.getMonth() - 1);
-      }
-      start.setDate(plnCutoffDay);
-
-      const end = new Date(start);
-      end.setMonth(end.getMonth() + 1);
-      end.setDate(plnCutoffDay);
-
-      const startStr = start.toISOString().split('T')[0];
-      const endStr = end.toISOString().split('T')[0];
-
-      return {
-        effectiveStartDate: startStr,
-        effectiveEndDate: endStr,
-        periodLabel: `Siklus PLN Sebelumnya (${formatDateIndo(startStr)} - ${formatDateIndo(endStr)})`,
-      };
-    }
-
-    if (periodPreset === 'last30') {
-      const start = new Date(today);
-      start.setDate(today.getDate() - 30);
-      const startStr = start.toISOString().split('T')[0];
-
-      return {
-        effectiveStartDate: startStr,
-        effectiveEndDate: todayStr,
-        periodLabel: `30 Hari Kalender Terakhir (${formatDateIndo(startStr)} - ${formatDateIndo(todayStr)})`,
-      };
-    }
-
-    if (periodPreset === 'calendar-month') {
-      const start = new Date(today.getFullYear(), today.getMonth(), 1);
-      const end = new Date(today.getFullYear(), today.getMonth() + 1, 0);
-      const startStr = start.toISOString().split('T')[0];
-      const endStr = end.toISOString().split('T')[0];
-
-      return {
-        effectiveStartDate: startStr,
-        effectiveEndDate: endStr,
-        periodLabel: `Bulan Kalender Ini (${formatDateIndo(startStr)} - ${formatDateIndo(endStr)})`,
-      };
-    }
-
-    // Custom
-    return {
-      effectiveStartDate: customStartDate,
-      effectiveEndDate: customEndDate,
-      periodLabel: `Kustom Periode (${formatDateIndo(customStartDate)} - ${formatDateIndo(customEndDate)})`,
-    };
-  }, [periodPreset, plnCutoffDay, customStartDate, customEndDate]);
-
-  // Filter records within effective date range
-  const periodRecords = useMemo(() => {
-    return records.filter(
-      (r) => r.date >= effectiveStartDate && r.date <= effectiveEndDate
-    );
-  }, [records, effectiveStartDate, effectiveEndDate]);
-
-  // Aggregates for the selected period
-  const totalKWhPeriod = periodRecords.reduce((acc, cur) => acc + cur.energyKWh, 0);
-  const totalCostPeriod = periodRecords.reduce((acc, cur) => acc + cur.costRp, 0);
-  const avgKWhPerDay = periodRecords.length ? totalKWhPeriod / periodRecords.length : 0;
-  const avgCostPerDay = periodRecords.length ? totalCostPeriod / periodRecords.length : 0;
-
-  // Find Peak Day in Period
-  let peakRecord = periodRecords[0];
-  periodRecords.forEach((r) => {
-    if (peakRecord && r.peakPowerW > peakRecord.peakPowerW) {
-      peakRecord = r;
-    }
-  });
-
-  // Filtered and Sorted records for table view
-  const displayRecords = useMemo(() => {
-    return periodRecords
-      .filter((r) => r.date.includes(searchTerm) || r.displayDate.toLowerCase().includes(searchTerm.toLowerCase()))
-      .sort((a, b) => {
-        let comp = 0;
-        if (sortField === 'date') comp = a.date.localeCompare(b.date);
-        if (sortField === 'energyKWh') comp = a.energyKWh - b.energyKWh;
-        if (sortField === 'costRp') comp = a.costRp - b.costRp;
-        if (sortField === 'peakPowerW') comp = a.peakPowerW - b.peakPowerW;
-        return sortAsc ? comp : -comp;
-      });
-  }, [periodRecords, searchTerm, sortField, sortAsc]);
-
-  const handleSaveTariff = (e: React.FormEvent) => {
-    e.preventDefault();
-    const rate = parseFloat(tempTariffRate);
-    if (!isNaN(rate) && rate > 0) {
-      onUpdateTariff({
-        tariffName: tempTariffName,
-        ratePerKWh: rate,
-      });
-      setIsSaved(true);
-      setTimeout(() => {
-        setIsSaved(false);
-        setShowTariffSettings(false);
-      }, 1000);
-    }
-  };
-
-  const handleExportFilteredCsv = () => {
-    const filename = `rekap_tagihan_PLN_${effectiveStartDate}_sd_${effectiveEndDate}.csv`;
-    onExportCsv(periodRecords, filename);
-  };
-
-  return (
-    <div className="space-y-6">
-      {/* Overview & Date Filter Card */}
-      <div className="bg-white rounded-2xl p-5 sm:p-6 border border-slate-200/80 shadow-xs space-y-5">
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg bg-teal-50 text-teal-600 flex items-center justify-center">
-                <CalendarDays className="w-4 h-4" />
-              </div>
-              <h2 className="text-lg font-bold text-slate-900">Histori Penggunaan Energi & Tagihan Listrik</h2>
-            </div>
-            <p className="text-xs text-slate-500 mt-1">
-              Rekapitulasi beban daya, pemakaian akumulasi kWh, dan audit estimasi biaya rekening listrik gedung dengan penyesuaian siklus penagihan PLN (Tanggal 20 - 20)
-            </p>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2 self-start lg:self-auto">
-            <button
-              onClick={() => setShowTariffSettings(!showTariffSettings)}
-              className="text-xs px-3 py-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 font-medium transition-colors flex items-center gap-1.5 cursor-pointer shadow-xs"
-            >
-              <Settings2 className="w-3.5 h-3.5 text-slate-500" />
-              <span>Atur Tarif Listrik ({formatRupiah(tariff.ratePerKWh)}/kWh)</span>
-            </button>
-
-            <button
-              onClick={handleExportFilteredCsv}
-              className="text-xs px-3 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-medium transition-colors flex items-center gap-1.5 cursor-pointer shadow-xs"
-            >
-              <Download className="w-3.5 h-3.5" />
-              <span>Unduh Rekap CSV Periode Ini</span>
-            </button>
-          </div>
+  return <div className="space-y-5">
+    <section className="pow-card p-5">
+      <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4">
+        <div>
+          <div className="flex items-center gap-2"><Database className="w-5 h-5 text-emerald-600"/><h2 className="text-lg font-bold">Histori Data MongoDB</h2></div>
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Hanya menampilkan data yang benar-benar tersimpan di database. Tidak ada data simulasi atau histori buatan.</p>
         </div>
-
-        {/* PLN Billing Cycle Selector Bar */}
-        <div className="pt-4 border-t border-slate-100 space-y-3">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
-                <Calendar className="w-4 h-4 text-emerald-600" />
-                Pilihan Siklus & Rentang Tanggal:
-              </span>
-              <span className="text-[11px] px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 font-semibold border border-emerald-200">
-                PLN Cutoff: Tgl {plnCutoffDay}
-              </span>
-            </div>
-
-            {/* Change Cutoff day optionally */}
-            <div className="flex items-center gap-1.5 text-xs text-slate-600">
-              <span className="text-[11px] text-slate-500">Tanggal Cutoff PLN:</span>
-              <select
-                value={plnCutoffDay}
-                onChange={(e) => setPlnCutoffDay(Number(e.target.value))}
-                className="bg-slate-50 border border-slate-200 rounded px-2 py-1 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-1 focus:ring-emerald-500"
-              >
-                <option value={15}>Tanggal 15</option>
-                <option value={20}>Tanggal 20 (Standar PLN)</option>
-                <option value={25}>Tanggal 25</option>
-                <option value={1}>Tanggal 1</option>
-              </select>
-            </div>
-          </div>
-
-          {/* Quick Preset Buttons */}
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              onClick={() => setPeriodPreset('pln-current')}
-              className={`text-xs px-3 py-1.5 rounded-xl border font-medium transition-all ${
-                periodPreset === 'pln-current'
-                  ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs font-semibold'
-                  : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
-              }`}
-            >
-              ⭐ Siklus PLN Berjalan (Tgl {plnCutoffDay} s/d {plnCutoffDay})
-            </button>
-
-            <button
-              onClick={() => setPeriodPreset('pln-previous')}
-              className={`text-xs px-3 py-1.5 rounded-xl border font-medium transition-all ${
-                periodPreset === 'pln-previous'
-                  ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs font-semibold'
-                  : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
-              }`}
-            >
-              Siklus PLN Bulan Lalu
-            </button>
-
-            <button
-              onClick={() => setPeriodPreset('last30')}
-              className={`text-xs px-3 py-1.5 rounded-xl border font-medium transition-all ${
-                periodPreset === 'last30'
-                  ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs font-semibold'
-                  : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
-              }`}
-            >
-              30 Hari Terakhir
-            </button>
-
-            <button
-              onClick={() => setPeriodPreset('calendar-month')}
-              className={`text-xs px-3 py-1.5 rounded-xl border font-medium transition-all ${
-                periodPreset === 'calendar-month'
-                  ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs font-semibold'
-                  : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
-              }`}
-            >
-              Bulan Kalender Ini
-            </button>
-
-            <button
-              onClick={() => setPeriodPreset('custom')}
-              className={`text-xs px-3 py-1.5 rounded-xl border font-medium transition-all ${
-                periodPreset === 'custom'
-                  ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs font-semibold'
-                  : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
-              }`}
-            >
-              Kustom Tanggal
-            </button>
-          </div>
-
-          {/* Custom Date Inputs if Custom selected */}
-          {periodPreset === 'custom' && (
-            <div className="flex flex-wrap items-center gap-3 p-3 rounded-xl bg-slate-50 border border-slate-200 animate-in fade-in duration-150">
-              <span className="text-xs font-semibold text-slate-700 flex items-center gap-1">
-                <Clock className="w-3.5 h-3.5 text-slate-400" />
-                Atur Rentang Tanggal Kustom:
-              </span>
-              <div className="flex items-center gap-2 text-xs">
-                <span className="text-slate-500">Dari:</span>
-                <input
-                  type="date"
-                  value={customStartDate}
-                  onChange={(e) => setCustomStartDate(e.target.value)}
-                  className="bg-white border border-slate-300 rounded-lg px-2.5 py-1 text-slate-800 font-medium focus:outline-none focus:ring-1 focus:ring-emerald-500"
-                />
-              </div>
-              <div className="flex items-center gap-2 text-xs">
-                <span className="text-slate-500">Sampai:</span>
-                <input
-                  type="date"
-                  value={customEndDate}
-                  onChange={(e) => setCustomEndDate(e.target.value)}
-                  className="bg-white border border-slate-300 rounded-lg px-2.5 py-1 text-slate-800 font-medium focus:outline-none focus:ring-1 focus:ring-emerald-500"
-                />
-              </div>
-            </div>
-          )}
-
-          {/* Active Period Label Badge */}
-          <div className="p-3 rounded-xl bg-emerald-50/70 border border-emerald-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs text-emerald-900">
-            <div className="flex items-center gap-2">
-              <Info className="w-4 h-4 text-emerald-700 shrink-0" />
-              <span>
-                <strong>Periode Aktif:</strong> {periodLabel} &bull; ({periodRecords.length} hari tercatat)
-              </span>
-            </div>
-            <span className="text-[11px] text-emerald-800 font-medium">
-              Sesuai pola pencatatan meter tagihan bulanan PLN
-            </span>
-          </div>
-        </div>
-
-        {/* Quick Tariff Settings Drawer / Accordion */}
-        {showTariffSettings && (
-          <form
-            onSubmit={handleSaveTariff}
-            className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-3 animate-in fade-in duration-150"
-          >
-            <div className="font-semibold text-xs text-slate-800 flex items-center gap-1.5">
-              <Coins className="w-4 h-4 text-amber-500" />
-              Konfigurasi Tarif PLN & Biaya Per kWh
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-              <div>
-                <label className="block text-slate-600 font-medium mb-1">Nama Tarif / Golongan:</label>
-                <input
-                  type="text"
-                  value={tempTariffName}
-                  onChange={(e) => setTempTariffName(e.target.value)}
-                  className="w-full bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-slate-800 focus:outline-none focus:ring-1 focus:ring-emerald-500"
-                  placeholder="Contoh: B-2 / TR Bisnis Menengah"
-                />
-              </div>
-              <div>
-                <label className="block text-slate-600 font-medium mb-1">Tarif Dasar per kWh (Rp):</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  value={tempTariffRate}
-                  onChange={(e) => setTempTariffRate(e.target.value)}
-                  className="w-full bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-slate-800 focus:outline-none focus:ring-1 focus:ring-emerald-500"
-                  placeholder="1444.70"
-                />
-              </div>
-            </div>
-            <div className="flex justify-end gap-2 pt-1">
-              <button
-                type="button"
-                onClick={() => setShowTariffSettings(false)}
-                className="text-xs px-3 py-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-white"
-              >
-                Batal
-              </button>
-              <button
-                type="submit"
-                className="text-xs px-3 py-1.5 rounded-lg bg-emerald-600 text-white font-medium hover:bg-emerald-700 flex items-center gap-1"
-              >
-                {isSaved ? <Check className="w-3.5 h-3.5" /> : null}
-                <span>{isSaved ? 'Tersimpan!' : 'Simpan & Hitung Ulang Biaya'}</span>
-              </button>
-            </div>
-          </form>
-        )}
-
-        {/* 4 Summary Highlight Cards for Selected Period */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <div className="bg-slate-50/70 border border-slate-200/70 rounded-xl p-4">
-            <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
-              Total Pemakaian Periode Ini
-            </span>
-            <div className="text-2xl font-bold text-slate-900 mt-1">
-              {formatNumber(totalKWhPeriod, 1)}{' '}
-              <span className="text-xs font-normal text-slate-500">kWh</span>
-            </div>
-            <div className="text-[11px] text-slate-500 mt-1">
-              Rata-rata: {formatNumber(avgKWhPerDay, 1)} kWh / hari
-            </div>
-          </div>
-
-          <div className="bg-slate-50/70 border border-slate-200/70 rounded-xl p-4">
-            <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
-              Estimasi Tagihan Rekening PLN
-            </span>
-            <div className="text-2xl font-bold text-emerald-700 mt-1">
-              {formatRupiah(totalCostPeriod)}
-            </div>
-            <div className="text-[11px] text-slate-500 mt-1">
-              Rata-rata: {formatRupiah(avgCostPerDay)} / hari
-            </div>
-          </div>
-
-          <div className="bg-slate-50/70 border border-slate-200/70 rounded-xl p-4">
-            <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
-              Hari Beban Tertinggi (Peak)
-            </span>
-            <div className="text-2xl font-bold text-amber-700 mt-1">
-              {formatWatts(peakRecord ? peakRecord.peakPowerW : 0)}
-            </div>
-            <div className="text-[11px] text-slate-500 mt-1">
-              {peakRecord ? `${peakRecord.displayDate} (Pukul ${peakRecord.peakTime})` : '-'}
-            </div>
-          </div>
-
-          <div className="bg-slate-50/70 border border-slate-200/70 rounded-xl p-4">
-            <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
-              Proyeksi Tagihan Siklus Penuh
-            </span>
-            <div className="text-2xl font-bold text-indigo-700 mt-1">
-              {formatRupiah(avgCostPerDay * 30)}
-            </div>
-            <div className="text-[11px] text-slate-500 mt-1">
-              Estimasi 30 Hari Tagihan Berjalan
-            </div>
-          </div>
+        <div className="flex flex-wrap items-end gap-2">
+          <label className="text-xs">Dari<input className="pow-input block mt-1" type="date" value={start} onChange={e=>setStart(e.target.value)}/></label>
+          <label className="text-xs">Sampai<input className="pow-input block mt-1" type="date" value={end} onChange={e=>setEnd(e.target.value)}/></label>
+          <button className="pow-btn pow-btn-primary" onClick={load} disabled={loading}><RefreshCw className={`w-4 h-4 ${loading?'animate-spin':''}`}/>{loading?'Memuat':'Tampilkan'}</button>
+          <button className="pow-btn bg-emerald-600 text-white disabled:opacity-40" onClick={downloadCsv} disabled={!rows.length}><Download className="w-4 h-4"/>CSV</button>
         </div>
       </div>
+      {error&&<p className="mt-3 text-sm text-rose-500">{error}</p>}
+    </section>
 
-      {/* Selected Period Table Card */}
-      <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
-        {/* Table Filter & Search Header */}
-        <div className="p-4 border-b border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3">
-          <div className="flex items-center gap-2 w-full sm:w-auto">
-            <div className="relative w-full sm:w-64">
-              <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-slate-400" />
-              <input
-                type="text"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="Cari tanggal..."
-                className="w-full pl-9 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-emerald-500"
-              />
-            </div>
-            <span className="text-xs text-slate-500 whitespace-nowrap">
-              ({displayRecords.length} hari dari {periodRecords.length} hari dalam periode)
-            </span>
-          </div>
-
-          <div className="text-xs text-slate-500">
-            Rentang data: {formatDateIndo(effectiveStartDate)} s/d {formatDateIndo(effectiveEndDate)}
-          </div>
-        </div>
-
-        {/* Table Body */}
-        {displayRecords.length === 0 ? (
-          <div className="p-10 text-center text-slate-400">
-            <Info className="w-8 h-8 mx-auto mb-2 text-slate-300" />
-            <p className="text-sm font-medium">Tidak ada data untuk rentang tanggal yang dipilih.</p>
-            <p className="text-xs text-slate-400 mt-1">Silakan sesuaikan tanggal mulai dan tanggal selesai di atas.</p>
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead className="bg-slate-50/80 border-b border-slate-200/80 text-slate-600 font-semibold uppercase tracking-wider">
-                <tr>
-                  <th
-                    onClick={() => {
-                      setSortField('date');
-                      setSortAsc(!sortAsc);
-                    }}
-                    className="py-3 px-4 cursor-pointer hover:text-slate-900"
-                  >
-                    <div className="flex items-center gap-1">
-                      <span>Tanggal</span>
-                      <ArrowUpDown className="w-3 h-3 text-slate-400" />
-                    </div>
-                  </th>
-                  <th
-                    onClick={() => {
-                      setSortField('energyKWh');
-                      setSortAsc(!sortAsc);
-                    }}
-                    className="py-3 px-4 cursor-pointer hover:text-slate-900"
-                  >
-                    <div className="flex items-center gap-1">
-                      <span>Konsumsi Energi</span>
-                      <ArrowUpDown className="w-3 h-3 text-slate-400" />
-                    </div>
-                  </th>
-                  <th
-                    onClick={() => {
-                      setSortField('costRp');
-                      setSortAsc(!sortAsc);
-                    }}
-                    className="py-3 px-4 cursor-pointer hover:text-slate-900"
-                  >
-                    <div className="flex items-center gap-1">
-                      <span>Estimasi Biaya</span>
-                      <ArrowUpDown className="w-3 h-3 text-slate-400" />
-                    </div>
-                  </th>
-                  <th
-                    onClick={() => {
-                      setSortField('peakPowerW');
-                      setSortAsc(!sortAsc);
-                    }}
-                    className="py-3 px-4 cursor-pointer hover:text-slate-900"
-                  >
-                    <div className="flex items-center gap-1">
-                      <span>Beban Puncak</span>
-                      <ArrowUpDown className="w-3 h-3 text-slate-400" />
-                    </div>
-                  </th>
-                  <th className="py-3 px-4">Jam Peak</th>
-                  <th className="py-3 px-4">Distribusi 3-Fasa (A / B / C)</th>
-                  <th className="py-3 px-4">Power Factor</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 text-slate-700">
-                {displayRecords.map((item) => (
-                  <tr key={item.id} className="hover:bg-slate-50/60 transition-colors">
-                    <td className="py-3 px-4 font-semibold text-slate-900 whitespace-nowrap">
-                      {formatDateIndo(item.date)}
-                    </td>
-                    <td className="py-3 px-4 font-bold text-slate-800 whitespace-nowrap">
-                      {formatNumber(item.energyKWh, 1)} kWh
-                    </td>
-                    <td className="py-3 px-4 font-semibold text-emerald-700 whitespace-nowrap">
-                      {formatRupiah(item.costRp)}
-                    </td>
-                    <td className="py-3 px-4 font-medium text-amber-700 whitespace-nowrap">
-                      {formatWatts(item.peakPowerW)}
-                    </td>
-                    <td className="py-3 px-4 text-slate-500 whitespace-nowrap">
-                      {item.peakTime} WIB
-                    </td>
-                    <td className="py-3 px-4 whitespace-nowrap">
-                      <div className="flex items-center gap-1.5 text-[11px]">
-                        <span className="text-rose-600 font-medium">{item.energyPhaseA}</span> /
-                        <span className="text-amber-600 font-medium">{item.energyPhaseB}</span> /
-                        <span className="text-sky-600 font-medium">{item.energyPhaseC}</span>
-                        <span className="text-slate-400 text-[10px]">kWh</span>
-                      </div>
-                    </td>
-                    <td className="py-3 px-4 whitespace-nowrap">
-                      <span
-                        className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold ${
-                          item.avgPowerFactor >= 0.85
-                            ? 'bg-emerald-50 text-emerald-700'
-                            : 'bg-rose-50 text-rose-700'
-                        }`}
-                      >
-                        {formatNumber(item.avgPowerFactor, 3)}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
+    <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="pow-card p-4"><div className="text-xs text-slate-500">Snapshot MongoDB</div><div className="text-2xl font-bold mt-1">{points.length}</div></div>
+      <div className="pow-card p-4"><div className="text-xs text-slate-500">Hari Tersedia</div><div className="text-2xl font-bold mt-1">{rows.length}</div></div>
+      <div className="pow-card p-4"><div className="text-xs text-slate-500">Energi Terhitung</div><div className="text-2xl font-bold mt-1">{fmt(total,3)} <span className="text-xs font-normal">kWh</span></div></div>
+      <div className="pow-card p-4"><div className="text-xs text-slate-500">Rentang Data Nyata</div><div className="text-sm font-bold mt-2">{first?first.toLocaleString('id-ID'):'Belum ada data'}</div><div className="text-xs text-slate-500">{last?'s/d '+last.toLocaleString('id-ID'):''}</div></div>
     </div>
-  );
+
+    <section className="pow-card overflow-hidden">
+      <div className="p-4 border-b border-slate-200 dark:border-slate-700 flex items-center gap-2"><CalendarDays className="w-4 h-4"/><h3 className="font-bold">Rekap Harian dari MongoDB</h3></div>
+      {!rows.length?<div className="p-12 text-center text-slate-500"><Zap className="w-8 h-8 mx-auto mb-3 opacity-40"/>{loading?'Mengambil data...':'Belum ada data MongoDB pada rentang tanggal ini.'}</div>:
+      <div className="overflow-x-auto"><table className="w-full text-sm"><thead className="bg-slate-50 dark:bg-slate-800/60 text-xs"><tr>
+        <th className="p-3 text-left">Tanggal</th><th className="p-3 text-right">Snapshot</th><th className="p-3 text-right">Energi kWh</th><th className="p-3 text-right">Peak kW</th><th className="p-3 text-right">Jam Peak</th><th className="p-3 text-right">PF Rata-rata</th><th className="p-3 text-right">R / S / T kWh</th>
+      </tr></thead><tbody>{rows.map(r=><tr key={r.date} className="border-t border-slate-100 dark:border-slate-800">
+        <td className="p-3 font-medium">{new Date(r.date+'T00:00:00').toLocaleDateString('id-ID',{day:'2-digit',month:'long',year:'numeric'})}</td>
+        <td className="p-3 text-right">{r.samples}</td><td className="p-3 text-right">{fmt(r.energyKWh,3)}</td><td className="p-3 text-right">{fmt(r.peakPowerW/1000,3)}</td><td className="p-3 text-right">{r.peakTime}</td><td className="p-3 text-right">{fmt(r.avgPowerFactor,3)}</td><td className="p-3 text-right">{fmt(r.phaseA,2)} / {fmt(r.phaseB,2)} / {fmt(r.phaseC,2)}</td>
+      </tr>)}</tbody></table></div>}
+    </section>
+    <p className="text-[11px] text-slate-500">Energi dihitung dari daya aktif antar-snapshot MongoDB. Selang perhitungan dibatasi maksimum 15 menit agar gap data tidak menghasilkan estimasi berlebihan.</p>
+  </div>;
 };
