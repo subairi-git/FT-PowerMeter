@@ -35,7 +35,6 @@ export default function App() {
   const [powerData, setPowerData] = useState<PowerMeterData>(INITIAL_POWER_DATA);
   const [mqttStatus, setMqttStatus] = useState<ConnectionStatus>('disconnected');
   const [packetCount, setPacketCount] = useState<number>(0);
-  const [isSimulating, setIsSimulating] = useState<boolean>(false);
 
   // Alarm states
   const [thresholds, setThresholds] = useState<AlarmThresholds>(alarmService.getThresholds());
@@ -103,10 +102,6 @@ export default function App() {
     };
   }, []);
 
-  const handleToggleSimulation = () => {
-    const nextState = mqttService.toggleSimulation();
-    setIsSimulating(nextState);
-  };
 
   const handleInjectCustomData = (partial: Partial<PowerMeterData>) => {
     mqttService.injectCustomData(partial);
@@ -172,8 +167,6 @@ export default function App() {
         activeAlarmsCount={activeAlarmsCount}
         onOpenMqttModal={() => setIsMqttModalOpen(true)}
         onOpenMongoModal={() => setIsMongoModalOpen(true)}
-        isSimulating={isSimulating}
-        onToggleSimulation={handleToggleSimulation}
         packetCount={packetCount}
       />
 
