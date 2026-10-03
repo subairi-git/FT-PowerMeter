@@ -80,13 +80,13 @@ export const Navbar: React.FC<NavbarProps> = ({
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <span className="font-bold text-lg text-slate-900 tracking-tight">VoltSense</span>
+                <span className="font-bold text-lg text-slate-900 tracking-tight">PowMon</span>
                 <span className="text-[10px] uppercase font-semibold tracking-wider px-1.5 py-0.5 rounded bg-slate-100 text-slate-600">
                   MDP-01
                 </span>
               </div>
               <p className="text-xs text-slate-500 font-medium hidden sm:block">
-                Power Management Gedung 3-Fasa
+                Power Management Gedung Fakultas Teknik
               </p>
             </div>
           </div>
@@ -168,7 +168,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             }`}
           >
             <BarChart3 className="w-4 h-4" />
-            <span>Grafik Daya Harian</span>
+            <span>Monitoring Grafik</span>
           </button>
 
           <button
