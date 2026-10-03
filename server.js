@@ -34,6 +34,7 @@ let lastSavedAt = null;
 let lastSaveError = null;
 let packetCount = 0;
 let saveCount = 0;
+let energyState = { dateKey: null, totalKWh: 0, phaseRKWh: 0, phaseSKWh: 0, phaseTKWh: 0, lastSavedAt: null };
 
 function sanitizeTelemetry(parsed) {
   const number = (value, fallback = 0) => {
@@ -126,17 +127,56 @@ function connectMqtt() {
   mqttClient.on('error', (error) => console.error('[MQTT] Error:', error.message));
 }
 
+function jakartaDateKey(date = new Date()) {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Jakarta', year: 'numeric', month: '2-digit', day: '2-digit' }).format(date);
+}
+
+async function restoreEnergyState() {
+  if (!readingsCollection) return;
+  const today = jakartaDateKey();
+  const last = await readingsCollection.find({ energyDate: today, energyTodayKWh: { $exists: true } }).sort({ savedAt: -1 }).limit(1).next();
+  if (last) {
+    energyState = {
+      dateKey: today,
+      totalKWh: Number(last.energyTodayKWh || 0),
+      phaseRKWh: Number(last.energyTodayRKWh || 0),
+      phaseSKWh: Number(last.energyTodaySKWh || 0),
+      phaseTKWh: Number(last.energyTodayTKWh || 0),
+      lastSavedAt: last.savedAt ? new Date(last.savedAt) : null,
+    };
+  } else {
+    energyState = { dateKey: today, totalKWh: 0, phaseRKWh: 0, phaseSKWh: 0, phaseTKWh: 0, lastSavedAt: null };
+  }
+}
+
 async function saveLatestTelemetry() {
   if (!latestData || !readingsCollection || !mongoConnected) return;
 
   try {
     const now = new Date();
+    const dateKey = jakartaDateKey(now);
+    if (energyState.dateKey !== dateKey) {
+      energyState = { dateKey, totalKWh: 0, phaseRKWh: 0, phaseSKWh: 0, phaseTKWh: 0, lastSavedAt: null };
+    }
+    if (energyState.lastSavedAt) {
+      const hours = Math.min(Math.max((now - energyState.lastSavedAt) / 3600000, 0), 0.25);
+      energyState.totalKWh += (Number(latestData.activePower) || 0) / 1000 * hours;
+      energyState.phaseRKWh += (Number(latestData.activePowerA) || 0) / 1000 * hours;
+      energyState.phaseSKWh += (Number(latestData.activePowerB) || 0) / 1000 * hours;
+      energyState.phaseTKWh += (Number(latestData.activePowerC) || 0) / 1000 * hours;
+    }
+    energyState.lastSavedAt = now;
     const document = {
       ...latestData,
       receivedAt: lastMqttAt || now,
       savedAt: now,
       source: 'render-mqtt-collector',
       mqttTopic: MQTT_TOPIC,
+      energyDate: dateKey,
+      energyTodayKWh: Number(energyState.totalKWh.toFixed(6)),
+      energyTodayRKWh: Number(energyState.phaseRKWh.toFixed(6)),
+      energyTodaySKWh: Number(energyState.phaseSKWh.toFixed(6)),
+      energyTodayTKWh: Number(energyState.phaseTKWh.toFixed(6)),
     };
 
     const result = await readingsCollection.insertOne(document);
@@ -186,6 +226,18 @@ app.get('/api/db-status', async (_req, res) => {
   }
 });
 
+app.get('/api/energy-today', (_req, res) => {
+  res.json({
+    success: true,
+    date: energyState.dateKey || jakartaDateKey(),
+    kWh: Number(energyState.totalKWh.toFixed(6)),
+    phaseR: Number(energyState.phaseRKWh.toFixed(6)),
+    phaseS: Number(energyState.phaseSKWh.toFixed(6)),
+    phaseT: Number(energyState.phaseTKWh.toFixed(6)),
+    lastSavedAt: energyState.lastSavedAt,
+  });
+});
+
 app.get('/api/latest', (_req, res) => {
   if (!latestData) {
     return res.status(503).json({ success: false, message: 'Belum ada data MQTT diterima' });
@@ -233,6 +285,7 @@ app.get('*', (req, res, next) => {
 
 async function start() {
   await connectMongo();
+  await restoreEnergyState();
   connectMqtt();
 
   setInterval(() => {
