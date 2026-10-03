@@ -8,7 +8,6 @@ import {
   PowerMeterData,
   AlarmThresholds,
   AlarmRecord,
-  DailyPowerRecord,
   TaripPLN,
   MqttConnectionConfig,
 } from './types/powermeter';
@@ -18,7 +17,6 @@ import {
   ConnectionStatus,
 } from './services/mqttService';
 import { alarmService, AlarmSettings } from './services/alarmService';
-import { historyService } from './services/historyService';
 import { realtimeBuffer } from './services/realtimeBuffer';
 
 import { Navbar } from './components/Navbar';
@@ -42,19 +40,22 @@ export default function App() {
   const [alarms, setAlarms] = useState<AlarmRecord[]>(alarmService.getAlarms());
   const [bannerAlert, setBannerAlert] = useState<AlarmRecord | null>(null);
 
-  // History & Tariff states
-  const [historyRecords, setHistoryRecords] = useState<DailyPowerRecord[]>(historyService.getHistory());
-  const [tariff, setTariff] = useState<TaripPLN>(historyService.getTariff());
+  // Tarif is kept only for realtime cost display; historical measurements come from MongoDB.
+  const [tariff] = useState<TaripPLN>({
+    tariffName: 'Golongan B-2 / TR (Bisnis Menengah)',
+    ratePerKWh: 1444.70,
+    ppnPercent: 0,
+    pjuPercent: 0,
+  });
 
   // Modals
   const [isMqttModalOpen, setIsMqttModalOpen] = useState(false);
   const [isMongoModalOpen, setIsMongoModalOpen] = useState(false);
   const [mqttConfig, setMqttConfig] = useState<MqttConnectionConfig>(mqttService.getConfig());
 
-  // Today's summary
-  const todayRecord = historyRecords[historyRecords.length - 1] || null;
-  const todayKWh = todayRecord ? todayRecord.energyKWh : 0;
-  const todayCost = todayRecord ? todayRecord.costRp : 0;
+  // Realtime summary no longer uses generated/local history.
+  const todayKWh = 0;
+  const todayCost = 0;
 
   // Initialize and subscribe to services
   useEffect(() => {
@@ -72,8 +73,6 @@ export default function App() {
       // Check alarms against thresholds
       alarmService.evaluateTelemetry(newData);
 
-      // Record into history
-      historyService.recordIncomingTelemetry(newData);
     });
 
     // 3. Subscribe to Alarm Records
@@ -85,10 +84,6 @@ export default function App() {
       }
     });
 
-    // 4. Subscribe to History Records
-    const unsubHistory = historyService.subscribeHistory((updatedHistory) => {
-      setHistoryRecords(updatedHistory);
-    });
 
     // Connect to HiveMQ automatically on mount
     mqttService.connect();
@@ -97,7 +92,6 @@ export default function App() {
       unsubStatus();
       unsubData();
       unsubAlarms();
-      unsubHistory();
       mqttService.disconnect();
     };
   }, []);
@@ -136,23 +130,6 @@ export default function App() {
   const handleClearAllAlarms = () => {
     alarmService.clearAllAlarms();
     setBannerAlert(null);
-  };
-
-  const handleUpdateTariff = (newTariff: Partial<TaripPLN>) => {
-    historyService.updateTariff(newTariff);
-    setTariff(historyService.getTariff());
-  };
-
-  const handleExportHistoryCsv = (customRecords?: DailyPowerRecord[], filename?: string) => {
-    const csvContent = historyService.exportCsv(customRecords);
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.setAttribute('download', filename || `rekap_energi_${new Date().toISOString().split('T')[0]}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
   };
 
   const activeAlarmsCount = alarms.filter((a) => a.status === 'active').length;
@@ -218,12 +195,7 @@ export default function App() {
         )}
 
         {activeTab === 'history' && (
-          <MonthlyHistory
-            records={historyRecords}
-            tariff={tariff}
-            onUpdateTariff={handleUpdateTariff}
-            onExportCsv={handleExportHistoryCsv}
-          />
+          <MonthlyHistory />
         )}
 
         {activeTab === 'alarms' && (
