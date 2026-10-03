@@ -1,0 +1,26 @@
+services:
+  - type: web
+    name: ft-power-meter
+    runtime: node
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_VERSION
+        value: 22
+      - key: MONGODB_URI
+        sync: false
+      - key: MONGODB_DB
+        value: powermeter_db
+      - key: MONGODB_COLLECTION
+        value: power_readings
+      - key: MQTT_BROKER_URL
+        value: mqtt://broker.hivemq.com:1883
+      - key: MQTT_TOPIC
+        value: andrian/powermeter/data
+      - key: SAVE_INTERVAL_MS
+        value: 60000
+      - key: VITE_MQTT_BROKER_URL
+        value: wss://broker.hivemq.com:8884/mqtt
+      - key: VITE_MQTT_TOPIC
+        value: andrian/powermeter/data
