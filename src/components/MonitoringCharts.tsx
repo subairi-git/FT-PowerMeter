@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { BarChart3, CalendarDays, Download, Radio, Search, Zap } from 'lucide-react';
+import { BarChart3, Download, Radio, Search, Zap } from 'lucide-react';
 import { PowerMeterData } from '../types/powermeter';
 import { realtimeBuffer } from '../services/realtimeBuffer';
 
@@ -23,7 +23,7 @@ function LineChart({title, unit, data, series}:{title:string;unit:string;data:Po
     <div className="flex items-center justify-between mb-2"><h3 className="font-bold text-sm">{title}</h3><span className="text-[11px] text-slate-400">{unit}</span></div>
     <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-52">
       {[0,.25,.5,.75,1].map((q,i)=>{const yy=top+q*(height-top-bottom);const v=max-q*range;return <g key={i}><line x1={left} y1={yy} x2={width-right} y2={yy} stroke="currentColor" opacity=".09"/><text x={left-7} y={yy+4} textAnchor="end" fontSize="10" fill="currentColor" opacity=".55">{v.toFixed(unit==='kW'?1:unit==='Cos φ'?2:0)}</text></g>})}
-      {series.map((s,si)=>{const pts=data.map((p,i)=>`${x(i)},${y(Number(p[s.key]||0)/(s.divisor||1))}`).join(' ');return <polyline key={s.label} points={pts} fill="none" stroke={s.color} strokeWidth="2.4" strokeLinejoin="round" strokeLinecap="round"/>})}
+      {series.map((s)=>{const pts=data.map((p,i)=>`${x(i)},${y(Number(p[s.key]||0)/(s.divisor||1))}`).join(' ');return <polyline key={s.label} points={pts} fill="none" stroke={s.color} strokeWidth="2.4" strokeLinejoin="round" strokeLinecap="round"/>})}
       {data.length>0 && <><text x={left} y={height-10} fontSize="10" fill="currentColor" opacity=".55">{new Date(data[0].at).toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'})}</text><text x={width-right} y={height-10} textAnchor="end" fontSize="10" fill="currentColor" opacity=".55">{new Date(data[data.length-1].at).toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'})}</text></>}
     </svg>
     <div className="flex flex-wrap justify-center gap-4 text-[11px]">{series.map(s=><span key={s.label} className="flex items-center gap-1.5"><i className="w-2.5 h-2.5 rounded-full" style={{background:s.color}}/>{s.label}</span>)}</div>
@@ -38,7 +38,7 @@ export function MonitoringCharts({liveData}:{liveData:PowerMeterData}) {
   const [start,setStart]=useState(localInput(startDefault));
   const [end,setEnd]=useState(localInput(now));
   const [loading,setLoading]=useState(false); const [error,setError]=useState('');
-  useEffect(()=>{setLive(mqttService.getRealtimeBuffer())},[liveData]);
+  useEffect(()=>{setLive(realtimeBuffer.getAll())},[liveData]);
   const data=mode==='realtime'?live:history;
 
   async function loadHistory(){
