@@ -42,7 +42,8 @@ class MqttService {
   private lastMessageTime: number | null = null;
   private isSimulationActive = false;
   private simulationTimer: number | null = null;
-  private lastData: PowerMeterData = { ...INITIAL_POWER_DATA };\n  private realtimeBuffer: (PowerMeterData & { at: string })[] = [];
+  private lastData: PowerMeterData = { ...INITIAL_POWER_DATA };
+  private realtimeBuffer: (PowerMeterData & { at: string })[] = [];
 
   constructor() {
     // Try to load saved config from localStorage
