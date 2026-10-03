@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   PowerMeterData,
   AlarmThresholds,
@@ -53,9 +53,22 @@ export default function App() {
   const [isMongoModalOpen, setIsMongoModalOpen] = useState(false);
   const [mqttConfig, setMqttConfig] = useState<MqttConnectionConfig>(mqttService.getConfig());
 
-  // Realtime summary no longer uses generated/local history.
-  const todayKWh = 0;
-  const todayCost = 0;
+  const [todayKWh, setTodayKWh] = useState(0);
+  const todayCost = Math.round(todayKWh * tariff.ratePerKWh);
+
+  useEffect(() => {
+    let active = true;
+    const loadEnergy = async () => {
+      try {
+        const res = await fetch('/api/energy-today');
+        const json = await res.json();
+        if (active && res.ok && json.success) setTodayKWh(Number(json.kWh || 0));
+      } catch {}
+    };
+    loadEnergy();
+    const timer = window.setInterval(loadEnergy, 30000);
+    return () => { active = false; window.clearInterval(timer); };
+  }, []);
 
   // Initialize and subscribe to services
   useEffect(() => {
