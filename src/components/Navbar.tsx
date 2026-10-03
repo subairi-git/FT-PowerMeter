@@ -6,9 +6,6 @@ import {
   Bell,
   Database,
   Radio,
-  Sliders,
-  Play,
-  Pause,
   Sun,
   Moon,
 } from 'lucide-react';
@@ -21,8 +18,6 @@ interface NavbarProps {
   activeAlarmsCount: number;
   onOpenMqttModal: () => void;
   onOpenMongoModal: () => void;
-  isSimulating: boolean;
-  onToggleSimulation: () => void;
   packetCount: number;
 }
 
@@ -33,8 +28,6 @@ export const Navbar: React.FC<NavbarProps> = ({
   activeAlarmsCount,
   onOpenMqttModal,
   onOpenMongoModal,
-  isSimulating,
-  onToggleSimulation,
   packetCount,
 }) => {
   const [darkMode, setDarkMode] = useState(() => localStorage.getItem('powmon_theme') === 'dark');
