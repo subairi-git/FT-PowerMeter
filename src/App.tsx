@@ -18,7 +18,7 @@ import {
   ConnectionStatus,
 } from './services/mqttService';
 import { alarmService, AlarmSettings } from './services/alarmService';
-import { historyService } from './services/historyService';
+import { historyService } from './services/historyService';\nimport { realtimeBuffer } from './services/realtimeBuffer';
 
 import { Navbar } from './components/Navbar';
 import { RealtimeDashboard } from './components/RealtimeDashboard';
@@ -66,7 +66,7 @@ export default function App() {
     // 2. Subscribe to MQTT Telemetry Data
     const unsubData = mqttService.subscribeData((newData) => {
       setPowerData(newData);
-      setPacketCount((prev) => prev + 1);
+      setPacketCount((prev) => prev + 1);\n      realtimeBuffer.push(newData);
 
       // Check alarms against thresholds
       alarmService.evaluateTelemetry(newData);
