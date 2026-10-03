@@ -34,7 +34,7 @@ let lastSavedAt = null;
 let lastSaveError = null;
 let packetCount = 0;
 let saveCount = 0;
-let energyState = { dateKey: null, totalKWh: 0, phaseRKWh: 0, phaseSKWh: 0, phaseTKWh: 0, lastSavedAt: null };
+let energyState = { dateKey: null, totalKWh: 0, phaseRKWh: 0, phaseSKWh: 0, phaseTKWh: 0, lastSampleAt: null, lastSample: null };
 
 function sanitizeTelemetry(parsed) {
   const number = (value, fallback = 0) => {
@@ -92,6 +92,23 @@ async function connectMongo() {
   }
 }
 
+function accumulateEnergy(sample, now = new Date()) {
+  const dateKey = jakartaDateKey(now);
+  if (energyState.dateKey !== dateKey) {
+    energyState = { dateKey, totalKWh: 0, phaseRKWh: 0, phaseSKWh: 0, phaseTKWh: 0, lastSampleAt: null, lastSample: null };
+  }
+  if (energyState.lastSampleAt && energyState.lastSample) {
+    const hours = Math.min(Math.max((now - energyState.lastSampleAt) / 3600000, 0), 10 / 3600);
+    const prev = energyState.lastSample;
+    energyState.totalKWh += ((prev.activePower + sample.activePower) / 2 / 1000) * hours;
+    energyState.phaseRKWh += ((prev.activePowerA + sample.activePowerA) / 2 / 1000) * hours;
+    energyState.phaseSKWh += ((prev.activePowerB + sample.activePowerB) / 2 / 1000) * hours;
+    energyState.phaseTKWh += ((prev.activePowerC + sample.activePowerC) / 2 / 1000) * hours;
+  }
+  energyState.lastSampleAt = now;
+  energyState.lastSample = sample;
+}
+
 function connectMqtt() {
   const clientId = `ft_powermeter_render_${Math.random().toString(16).slice(2, 10)}`;
   mqttClient = mqtt.connect(MQTT_BROKER_URL, {
@@ -116,6 +133,7 @@ function connectMqtt() {
       const parsed = JSON.parse(payload.toString());
       latestData = sanitizeTelemetry(parsed);
       lastMqttAt = new Date();
+      accumulateEnergy(latestData, lastMqttAt);
       packetCount += 1;
     } catch (error) {
       console.error('[MQTT] Invalid JSON:', error);
