@@ -9,6 +9,8 @@ import {
   Sliders,
   Play,
   Pause,
+  Sun,
+  Moon,
 } from 'lucide-react';
 import { ConnectionStatus } from '../services/mqttService';
 
@@ -35,6 +37,12 @@ export const Navbar: React.FC<NavbarProps> = ({
   onToggleSimulation,
   packetCount,
 }) => {
+  const [darkMode, setDarkMode] = useState(() => localStorage.getItem('powmon_theme') === 'dark');
+  useEffect(() => {
+    document.documentElement.classList.toggle('dark', darkMode);
+    localStorage.setItem('powmon_theme', darkMode ? 'dark' : 'light');
+  }, [darkMode]);
+
   const getStatusBadge = () => {
     switch (mqttStatus) {
       case 'connected':
