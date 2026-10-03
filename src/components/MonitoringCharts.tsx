@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { BarChart3, CalendarDays, Download, Radio, Search, Zap } from 'lucide-react';
-import { PowerMeterData } from '../types/powermeter';
+import { PowerMeterData } from '../types/powermeter';\nimport { mqttService } from '../services/mqttService';
 
 type Point = PowerMeterData & { at: string };
 type Series = { key: keyof PowerMeterData; label: string; color: string; divisor?: number };
@@ -32,12 +32,12 @@ function LineChart({title, unit, data, series}:{title:string;unit:string;data:Po
 export function MonitoringCharts({liveData}:{liveData:PowerMeterData}) {
   const now=new Date(); const startDefault=new Date(now); startDefault.setHours(0,0,0,0);
   const [mode,setMode]=useState<'realtime'|'history'>('realtime');
-  const [live,setLive]=useState<Point[]>([]);
+  const [live,setLive]=useState<Point[]>(() => mqttService.getRealtimeBuffer());
   const [history,setHistory]=useState<Point[]>([]);
   const [start,setStart]=useState(localInput(startDefault));
   const [end,setEnd]=useState(localInput(now));
   const [loading,setLoading]=useState(false); const [error,setError]=useState('');
-  useEffect(()=>{setLive(prev=>[...prev,{...liveData,at:new Date().toISOString()}].slice(-120))},[liveData]);
+  useEffect(()=>{setLive(mqttService.getRealtimeBuffer())},[liveData]);
   const data=mode==='realtime'?live:history;
 
   async function loadHistory(){
@@ -64,7 +64,7 @@ export function MonitoringCharts({liveData}:{liveData:PowerMeterData}) {
   return <div className="space-y-5">
     <section className="pow-card p-4 sm:p-5">
       <div className="flex flex-col xl:flex-row xl:items-end justify-between gap-4">
-        <div><div className="flex items-center gap-2 text-blue-500"><BarChart3 className="w-5 h-5"/><span className="font-bold">Monitoring Grafik</span></div><p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Realtime MQTT atau histori MongoDB tersimpan setiap 5 menit.</p></div>
+        <div><div className="flex items-center gap-2 text-blue-500"><BarChart3 className="w-5 h-5"/><span className="font-bold text-base">Monitoring Grafik</span></div><p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Realtime menampilkan 100 sampel terakhir dari RAM. Histori MongoDB tersimpan setiap 5 menit.</p></div>
         <div className="flex flex-wrap items-end gap-2">
           <button onClick={()=>setMode('realtime')} className={`pow-btn ${mode==='realtime'?'pow-btn-primary':'pow-btn-soft'}`}><Radio className="w-4 h-4"/>Realtime</button>
           <label className="text-[11px]">Dari<input type="datetime-local" value={start} onChange={e=>setStart(e.target.value)} className="pow-input block mt-1"/></label>
