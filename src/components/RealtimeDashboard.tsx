@@ -79,7 +79,7 @@ export const RealtimeDashboard: React.FC<RealtimeDashboardProps> = ({
               </span>
             </div>
             <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
-              Pemantauan Daya 3-Fasa
+              Power Management Gedung Fakultas Teknik
             </h1>
             <p className="text-sm text-slate-300">
               Panel MDP Utama &bull; Beban Terpasang Gedung &bull; Tarif {tariff.tariffName} (Rp {formatNumber(tariff.ratePerKWh, 0)}/kWh)
