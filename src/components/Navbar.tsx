@@ -49,7 +49,7 @@ export const Navbar: React.FC<NavbarProps> = ({
         return (
           <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
             <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-            HiveMQ Terhubung
+            MQTT Terhubung
           </span>
         );
       case 'connecting':
@@ -105,31 +105,6 @@ export const Navbar: React.FC<NavbarProps> = ({
               {darkMode ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
               <span className="hidden md:inline">{darkMode ? 'Terang' : 'Gelap'}</span>
             </button>
-            {/* Simulation toggle button */}
-            <button
-              onClick={onToggleSimulation}
-              title={isSimulating ? "Matikan simulasi data" : "Nyalakan simulasi telemetri IoT"}
-              className={`text-xs px-2.5 py-1.5 rounded-lg border font-medium flex items-center gap-1.5 transition-all ${
-                isSimulating
-                  ? 'bg-indigo-50 text-indigo-700 border-indigo-200 shadow-xs'
-                  : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
-              }`}
-            >
-              {isSimulating ? (
-                <>
-                  <Pause className="w-3.5 h-3.5 text-indigo-600" />
-                  <span className="hidden md:inline">Simulasi Aktif</span>
-                  <span className="md:hidden">Sim</span>
-                </>
-              ) : (
-                <>
-                  <Play className="w-3.5 h-3.5 text-slate-500" />
-                  <span className="hidden md:inline">Tes Simulasi</span>
-                  <span className="md:hidden">Tes</span>
-                </>
-              )}
-            </button>
-
             {/* MQTT Badge button */}
             <button
               onClick={onOpenMqttModal}
@@ -146,7 +121,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               className="hidden lg:flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-slate-50 text-slate-700 border border-slate-200 hover:bg-slate-100 transition-colors"
             >
               <Database className="w-3.5 h-3.5 text-emerald-600" />
-              <span>MongoDB Atlas</span>
+              <span>Database Connect</span>
             </button>
 
             {/* Packet counter pill */}
