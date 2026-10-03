@@ -160,7 +160,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             }`}
           >
             <CalendarDays className="w-4 h-4" />
-            <span>Histori 1 Bulan</span>
+            <span>Histori Data</span>
           </button>
 
           <button
