@@ -22,7 +22,7 @@ import { historyService } from './services/historyService';
 
 import { Navbar } from './components/Navbar';
 import { RealtimeDashboard } from './components/RealtimeDashboard';
-import { DailyBarChart } from './components/DailyBarChart';
+import { MonitoringCharts } from './components/MonitoringCharts';
 import { MonthlyHistory } from './components/MonthlyHistory';
 import { AlarmManagement } from './components/AlarmManagement';
 import { MqttConfigModal } from './components/MqttConfigModal';
@@ -219,7 +219,7 @@ export default function App() {
         )}
 
         {activeTab === 'chart' && (
-          <DailyBarChart records={historyRecords} tariff={tariff} />
+          <MonitoringCharts liveData={powerData} />
         )}
 
         {activeTab === 'history' && (
@@ -250,7 +250,7 @@ export default function App() {
       <footer className="mt-auto border-t border-slate-200/80 bg-white py-4 text-xs text-slate-500">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-2 text-center sm:text-left">
           <div>
-            <span className="font-semibold text-slate-700">VoltSense Smart Building</span> &bull; Sistem Pemantauan Daya Listrik Gedung 3-Fasa
+            <span className="font-semibold text-slate-700">PowMon</span> &bull; Power Management Gedung Fakultas Teknik
           </div>
           <div className="flex items-center gap-3">
             <span>Broker: broker.hivemq.com</span>
