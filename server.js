@@ -196,9 +196,17 @@ app.get('/api/latest', (_req, res) => {
 app.get('/api/history', async (req, res) => {
   try {
     if (!readingsCollection) throw new Error('MongoDB belum terhubung');
-    const requested = Number(req.query.limit || 100);
-    const limit = Math.min(Math.max(Number.isFinite(requested) ? requested : 100, 1), 5000);
-    const data = await readingsCollection.find({}).sort({ savedAt: -1 }).limit(limit).toArray();
+    const requested = Number(req.query.limit || 1000);
+    const limit = Math.min(Math.max(Number.isFinite(requested) ? requested : 1000, 1), 10000);
+    const query = {};
+    const start = req.query.start ? new Date(String(req.query.start)) : null;
+    const end = req.query.end ? new Date(String(req.query.end)) : null;
+    if ((start && !Number.isNaN(start.getTime())) || (end && !Number.isNaN(end.getTime()))) {
+      query.savedAt = {};
+      if (start && !Number.isNaN(start.getTime())) query.savedAt.$gte = start;
+      if (end && !Number.isNaN(end.getTime())) query.savedAt.$lte = end;
+    }
+    const data = await readingsCollection.find(query).sort({ savedAt: 1 }).limit(limit).toArray();
     res.json({ success: true, count: data.length, data });
   } catch (error) {
     res.status(500).json({ success: false, message: error instanceof Error ? error.message : String(error) });
