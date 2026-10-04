@@ -222,6 +222,11 @@ export default function App() {
             onAcknowledgeAll={handleAcknowledgeAllAlarms}
             onClearAll={handleClearAllAlarms}
             onPlayTestSound={() => alarmService.playAlarmSound()}
+            ratePerKWh={tariff.ratePerKWh}
+            onSaveTariff={(rate) => {
+              localStorage.setItem('powmon_tariff', String(rate));
+              setTariff(prev => ({ ...prev, ratePerKWh: rate }));
+            }}
           />
         )}
       </main>
@@ -264,11 +269,6 @@ export default function App() {
       <MongoDbConfigModal
         isOpen={isMongoModalOpen}
         onClose={() => setIsMongoModalOpen(false)}
-        ratePerKWh={tariff.ratePerKWh}
-        onSaveTariff={(rate) => {
-          localStorage.setItem('powmon_tariff', String(rate));
-          setTariff(prev => ({ ...prev, ratePerKWh: rate }));
-        }}
       />
     </div>
   );
