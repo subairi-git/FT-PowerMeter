@@ -14,6 +14,10 @@ import {
   ShieldAlert,
   ArrowDownCircle,
   ArrowUpCircle,
+  LockKeyhole,
+  Eye,
+  EyeOff,
+  Coins,
 } from 'lucide-react';
 import { AlarmThresholds, AlarmRecord } from '../types/powermeter';
 import { AlarmSettings, DEFAULT_THRESHOLDS } from '../services/alarmService';
@@ -29,6 +33,8 @@ interface AlarmManagementProps {
   onAcknowledgeAll: () => void;
   onClearAll: () => void;
   onPlayTestSound: () => void;
+  ratePerKWh: number;
+  onSaveTariff: (rate: number) => void;
 }
 
 export const AlarmManagement: React.FC<AlarmManagementProps> = ({
@@ -41,11 +47,18 @@ export const AlarmManagement: React.FC<AlarmManagementProps> = ({
   onAcknowledgeAll,
   onClearAll,
   onPlayTestSound,
+  ratePerKWh,
+  onSaveTariff,
 }) => {
   const [activeSubTab, setActiveSubTab] = useState<'records' | 'settings'>('records');
   const [filterSeverity, setFilterSeverity] = useState<'all' | 'critical' | 'warning' | 'active'>('all');
   const [formData, setFormData] = useState<AlarmThresholds>(thresholds);
   const [isSaved, setIsSaved] = useState(false);
+  const [settingsUnlocked,setSettingsUnlocked]=useState(false);
+  const [adminPassword,setAdminPassword]=useState('');
+  const [showPassword,setShowPassword]=useState(false);
+  const [passwordError,setPasswordError]=useState('');
+  const [tariffInput,setTariffInput]=useState(String(ratePerKWh));
 
   const activeAlarms = alarms.filter((a) => a.status === 'active');
 
@@ -58,7 +71,10 @@ export const AlarmManagement: React.FC<AlarmManagementProps> = ({
 
   const handleSaveThresholds = (e: React.FormEvent) => {
     e.preventDefault();
+    const tariffValue=Number(tariffInput);
+    if(!Number.isFinite(tariffValue)||tariffValue<=0){ setPasswordError('Tarif listrik harus lebih dari 0.'); return; }
     onUpdateThresholds(formData);
+    onSaveTariff(tariffValue);
     setIsSaved(true);
     setTimeout(() => setIsSaved(false), 2000);
   };
@@ -130,7 +146,7 @@ export const AlarmManagement: React.FC<AlarmManagementProps> = ({
             )}
           </button>
           <button
-            onClick={() => setActiveSubTab('settings')}
+            onClick={() => { setActiveSubTab('settings'); setSettingsUnlocked(false); setAdminPassword(''); setPasswordError(''); }}
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all ${
               activeSubTab === 'settings'
                 ? 'bg-white text-slate-900 shadow-xs font-semibold'
@@ -332,7 +348,17 @@ export const AlarmManagement: React.FC<AlarmManagementProps> = ({
       )}
 
       {/* SUB-TAB 2: SETTINGS (MIN & MAX THRESHOLDS) */}
-      {activeSubTab === 'settings' && (
+      {activeSubTab === 'settings' && !settingsUnlocked && (
+        <form onSubmit={(e)=>{e.preventDefault();if(adminPassword==='teknik@unmer'){setSettingsUnlocked(true);setPasswordError('')}else setPasswordError('Password tidak sesuai.')}} className="bg-white rounded-2xl p-6 border border-slate-200/80 shadow-xs max-w-md mx-auto space-y-4">
+          <div className="w-12 h-12 mx-auto rounded-full bg-slate-100 flex items-center justify-center"><LockKeyhole className="w-5 h-5 text-slate-600"/></div>
+          <div className="text-center"><h3 className="font-bold text-slate-900">Akses Pengaturan</h3><p className="text-xs text-slate-500 mt-1">Masukkan password administrator untuk mengubah parameter sistem.</p></div>
+          <div className="relative"><input autoFocus type={showPassword?'text':'password'} value={adminPassword} onChange={e=>setAdminPassword(e.target.value)} className="pow-input w-full pr-10" placeholder="Password administrator"/><button type="button" onClick={()=>setShowPassword(v=>!v)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400">{showPassword?<EyeOff className="w-4 h-4"/>:<Eye className="w-4 h-4"/>}</button></div>
+          {passwordError&&<p className="text-xs text-rose-600">{passwordError}</p>}
+          <button type="submit" className="pow-btn pow-btn-primary w-full justify-center">Masuk Pengaturan</button>
+        </form>
+      )}
+
+      {activeSubTab === 'settings' && settingsUnlocked && (
         <form onSubmit={handleSaveThresholds} className="space-y-5">
           <div className="bg-white rounded-2xl p-5 sm:p-6 border border-slate-200/80 shadow-xs space-y-6">
             <div className="flex items-center justify-between border-b border-slate-100 pb-4">
@@ -372,7 +398,12 @@ export const AlarmManagement: React.FC<AlarmManagementProps> = ({
               </div>
             </div>
 
-            {/* Threshold Inputs Grid */}
+            <div className="p-4 rounded-xl bg-amber-50 border border-amber-200">
+              <div className="flex items-center gap-2 mb-3"><Coins className="w-4 h-4 text-amber-600"/><span className="font-bold text-sm text-slate-800">Tarif Energi Listrik</span></div>
+              <div className="relative max-w-sm"><span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-slate-500">Rp</span><input type="number" min="0" step="0.01" value={tariffInput} onChange={e=>setTariffInput(e.target.value)} className="w-full bg-white border border-amber-300 rounded-lg pl-10 pr-16 py-2 text-sm font-semibold focus:outline-none focus:ring-1 focus:ring-amber-500"/><span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-500">/ kWh</span></div>
+            </div>
+
+                        {/* Threshold Inputs Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
               {/* 1. Tegangan Minimal & Maksimal */}
               <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-3">
