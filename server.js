@@ -12,9 +12,10 @@ const PORT = Number(process.env.PORT || 10000);
 const MONGODB_URI = process.env.MONGODB_URI;
 const DB_NAME = process.env.MONGODB_DB || 'powermeter_db';
 const COLLECTION_NAME = process.env.MONGODB_COLLECTION || 'power_readings';
-const MQTT_BROKER_URL = process.env.MQTT_BROKER_URL || 'mqtt://broker.hivemq.com:1883';
+const MQTT_BROKER_URL = process.env.MQTT_BROKER_URL || process.env.MQTT_BROKER || 'mqtt://broker.hivemq.com:1883';
 const MQTT_TOPIC = process.env.MQTT_TOPIC || 'andrian/powermeter/data';
-const SAVE_INTERVAL_MS = Number(process.env.SAVE_INTERVAL_MS || 60000);
+const MQTT_CLIENT_ID = process.env.MQTT_CLIENT_ID || `ft_powermeter_render_${Math.random().toString(16).slice(2, 10)}`;
+const SAVE_INTERVAL_MS = Number(process.env.SAVE_INTERVAL_MS || 300000);
 
 if (!MONGODB_URI) {
   console.error('FATAL: MONGODB_URI belum diatur.');
@@ -110,9 +111,8 @@ function accumulateEnergy(sample, now = new Date()) {
 }
 
 function connectMqtt() {
-  const clientId = `ft_powermeter_render_${Math.random().toString(16).slice(2, 10)}`;
   mqttClient = mqtt.connect(MQTT_BROKER_URL, {
-    clientId,
+    clientId: MQTT_CLIENT_ID,
     clean: true,
     keepalive: 60,
     connectTimeout: 10000,
@@ -173,7 +173,7 @@ async function saveLatestTelemetry() {
 
   try {
     const now = new Date();
-    const dateKey = jakartaDateKey(now);
+    const dateKey = energyState.dateKey || jakartaDateKey(now);
     const document = {
       ...latestData,
       receivedAt: lastMqttAt || now,
@@ -243,6 +243,16 @@ app.get('/api/energy-today', (_req, res) => {
     phaseS: Number(energyState.phaseSKWh.toFixed(6)),
     phaseT: Number(energyState.phaseTKWh.toFixed(6)),
     lastSampleAt: energyState.lastSampleAt,
+  });
+});
+
+app.get('/api/realtime', (_req, res) => {
+  const connected = Boolean(mqttClient?.connected);
+  res.status(latestData ? 200 : 503).json({
+    success: Boolean(latestData),
+    mqtt: { connected, topic: MQTT_TOPIC, packetCount, lastMessageAt: lastMqttAt },
+    receivedAt: lastMqttAt,
+    data: latestData,
   });
 });
 
