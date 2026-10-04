@@ -4,7 +4,7 @@ import {
   BarChart3,
   CalendarDays,
   Bell,
-  Settings,
+  Database,
   Radio,
   Sun,
   Moon,
@@ -110,11 +110,11 @@ export const Navbar: React.FC<NavbarProps> = ({
             {/* MongoDB Atlas Info Button */}
             <button
               onClick={onOpenMongoModal}
-              title="Pengaturan Sistem"
+              title="Status Database MongoDB"
               className="hidden lg:flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-slate-50 text-slate-700 border border-slate-200 hover:bg-slate-100 transition-colors"
             >
-              <Settings className="w-3.5 h-3.5 text-slate-600" />
-              <span>Pengaturan</span>
+              <Database className="w-3.5 h-3.5 text-emerald-600" />
+              <span>Database Connect</span>
             </button>
 
             {/* Packet counter pill */}
