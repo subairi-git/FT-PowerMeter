@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { CalendarDays, Download, RefreshCw, Database, Zap, Coins, BarChart3 } from 'lucide-react';
+import { CalendarDays, Download, RefreshCw, Database, Zap, BarChart3 } from 'lucide-react';
 import { PowerMeterData } from '../types/powermeter';
 
 type MongoPoint = PowerMeterData & { savedAt: string; receivedAt?: string; energyTodayKWh?: number; energyTodayRKWh?: number; energyTodaySKWh?: number; energyTodayTKWh?: number };
