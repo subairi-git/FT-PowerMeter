@@ -1,12 +1,14 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { CalendarDays, Download, RefreshCw, Database, Zap } from 'lucide-react';
+import { CalendarDays, Download, RefreshCw, Database, Zap, Coins, BarChart3 } from 'lucide-react';
 import { PowerMeterData } from '../types/powermeter';
 
-type MongoPoint = PowerMeterData & { savedAt: string; receivedAt?: string };
+type MongoPoint = PowerMeterData & { savedAt: string; receivedAt?: string; energyTodayKWh?: number; energyTodayRKWh?: number; energyTodaySKWh?: number; energyTodayTKWh?: number };
 type DailyRow = {
   date: string; samples: number; energyKWh: number; peakPowerW: number;
-  peakTime: string; avgPowerFactor: number; phaseA: number; phaseB: number; phaseC: number;
+  peakTime: string; avgPowerFactor: number; phaseA: number; phaseB: number; phaseC: number; costRp: number;
 };
+
+const TARIFF_RP_PER_KWH=1444.70;
 
 const pad=(n:number)=>String(n).padStart(2,'0');
 const localDate=(d:Date)=>`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
@@ -51,21 +53,29 @@ export const MonthlyHistory: React.FC = () => {
         bKwh+=(arr[i].activePowerB||0)/1000*dt;
         cKwh+=(arr[i].activePowerC||0)/1000*dt;
       }
+      const lastPoint=arr[arr.length-1];
+      if(typeof lastPoint.energyTodayKWh==='number'){
+        energy=lastPoint.energyTodayKWh;
+        aKwh=Number(lastPoint.energyTodayRKWh||0);
+        bKwh=Number(lastPoint.energyTodaySKWh||0);
+        cKwh=Number(lastPoint.energyTodayTKWh||0);
+      }
       const peak=arr.reduce((m,p)=>(p.activePower||0)>(m.activePower||0)?p:m,arr[0]);
-      const pf=arr.reduce((s,p)=>s+(p.powerFactor||0),0)/arr.length;
+      const pf=arr.reduce((sum,p)=>sum+(p.powerFactor||0),0)/arr.length;
       return {date,samples:arr.length,energyKWh:energy,peakPowerW:peak?.activePower||0,
         peakTime:peak?new Date(peak.savedAt).toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'}):'-',
-        avgPowerFactor:pf,phaseA:aKwh,phaseB:bKwh,phaseC:cKwh};
+        avgPowerFactor:pf,phaseA:aKwh,phaseB:bKwh,phaseC:cKwh,costRp:energy*TARIFF_RP_PER_KWH};
     }).sort((a,b)=>b.date.localeCompare(a.date));
   },[points]);
 
-  const total=rows.reduce((s,r)=>s+r.energyKWh,0);
+  const total=rows.reduce((sum,r)=>sum+r.energyKWh,0);
+  const totalCost=rows.reduce((sum,r)=>sum+r.costRp,0);
   const first=points.length?new Date(points[0].savedAt):null;
   const last=points.length?new Date(points[points.length-1].savedAt):null;
 
   function downloadCsv(){
-    const head=['Tanggal','Jumlah Snapshot','Energi Terhitung (kWh)','Peak Power (W)','Jam Peak','PF Rata-rata','Fasa R (kWh)','Fasa S (kWh)','Fasa T (kWh)'];
-    const data=rows.map(r=>[r.date,r.samples,r.energyKWh.toFixed(4),r.peakPowerW.toFixed(2),r.peakTime,r.avgPowerFactor.toFixed(4),r.phaseA.toFixed(4),r.phaseB.toFixed(4),r.phaseC.toFixed(4)]);
+    const head=['Tanggal','Jumlah Snapshot','Energi Terhitung (kWh)','Estimasi Biaya (Rp)','Peak Power (W)','Jam Peak','PF Rata-rata','Fasa R (kWh)','Fasa S (kWh)','Fasa T (kWh)'];
+    const data=rows.map(r=>[r.date,r.samples,r.energyKWh.toFixed(4),Math.round(r.costRp),r.peakPowerW.toFixed(2),r.peakTime,r.avgPowerFactor.toFixed(4),r.phaseA.toFixed(4),r.phaseB.toFixed(4),r.phaseC.toFixed(4)]);
     const csv='\uFEFF'+[head,...data].map(r=>r.join(',')).join('\\n');
     const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));
     a.download=`powmon_histori_${start}_sd_${end}.csv`;a.click();URL.revokeObjectURL(a.href);
