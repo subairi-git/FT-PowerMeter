@@ -16,7 +16,6 @@ interface NavbarProps {
   setActiveTab: (tab: 'realtime' | 'chart' | 'history' | 'alarms') => void;
   mqttStatus: ConnectionStatus;
   activeAlarmsCount: number;
-  onOpenMqttModal: () => void;
   onOpenMongoModal: () => void;
   packetCount: number;
 }
@@ -26,7 +25,6 @@ export const Navbar: React.FC<NavbarProps> = ({
   setActiveTab,
   mqttStatus,
   activeAlarmsCount,
-  onOpenMqttModal,
   onOpenMongoModal,
   packetCount,
 }) => {
@@ -99,13 +97,9 @@ export const Navbar: React.FC<NavbarProps> = ({
               <span className="hidden md:inline">{darkMode ? 'Terang' : 'Gelap'}</span>
             </button>
             {/* MQTT Badge button */}
-            <button
-              onClick={onOpenMqttModal}
-              className="cursor-pointer hover:opacity-90 transition-opacity"
-              title="Atur koneksi MQTT HiveMQ"
-            >
+            <div title="Status koneksi MQTT server Render">
               {getStatusBadge()}
-            </button>
+            </div>
 
             {/* MongoDB Atlas Info Button */}
             <button
