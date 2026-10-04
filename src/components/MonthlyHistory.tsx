@@ -73,6 +73,24 @@ export const MonthlyHistory: React.FC = () => {
   const first=points.length?new Date(points[0].savedAt):null;
   const last=points.length?new Date(points[points.length-1].savedAt):null;
 
+  function HistoryComboChart(){
+    const data=[...rows].sort((a,b)=>a.date.localeCompare(b.date));
+    if(!data.length) return null;
+    const W=900,H=300,L=58,R=78,T=28,B=52,plotW=W-L-R,plotH=H-T-B;
+    const maxK=Math.max(...data.map(d=>d.energyKWh),1);
+    const maxRp=Math.max(...data.map(d=>d.costRp),1);
+    const step=plotW/data.length, barW=Math.max(5,Math.min(30,step*0.55));
+    const pts=data.map((d,i)=>({x:L+step*i+step/2,y:T+plotH-(d.costRp/maxRp)*plotH}));
+    const path=pts.map((p,i)=>(i?'L':'M')+p.x.toFixed(1)+' '+p.y.toFixed(1)).join(' ');
+    return <div className="w-full overflow-x-auto"><svg viewBox={`0 0 ${W} ${H}`} className="w-full min-w-[720px] h-auto" role="img" aria-label="Grafik kWh harian dan estimasi biaya rupiah">
+      {[0,0.25,0.5,0.75,1].map(v=><g key={v}><line x1={L} x2={W-R} y1={T+plotH*(1-v)} y2={T+plotH*(1-v)} stroke="currentColor" className="text-slate-200 dark:text-slate-700" strokeWidth="1"/><text x={L-8} y={T+plotH*(1-v)+4} textAnchor="end" fontSize="10" fill="currentColor" className="text-slate-500">{fmt(maxK*v,1)}</text><text x={W-R+8} y={T+plotH*(1-v)+4} fontSize="10" fill="currentColor" className="text-slate-500">{Math.round(maxRp*v/1000)}k</text></g>)}
+      {data.map((d,i)=>{const x=L+step*i+step/2;const h=(d.energyKWh/maxK)*plotH;return <g key={d.date}><rect x={x-barW/2} y={T+plotH-h} width={barW} height={h} rx="3" className="fill-emerald-500 opacity-80"><title>{d.date}: {fmt(d.energyKWh,3)} kWh</title></rect><text x={x} y={H-25} textAnchor="middle" fontSize="9" fill="currentColor" className="text-slate-500" transform={data.length>12?`rotate(-45 ${x} ${H-25})`:undefined}>{new Date(d.date+'T00:00:00').toLocaleDateString('id-ID',{day:'2-digit',month:'short'})}</text></g>})}
+      <path d={path} fill="none" className="stroke-amber-500" strokeWidth="3" strokeLinejoin="round" strokeLinecap="round"/>
+      {pts.map((p,i)=><circle key={i} cx={p.x} cy={p.y} r="4" className="fill-amber-500"><title>{data[i].date}: Rp {Math.round(data[i].costRp).toLocaleString('id-ID')}</title></circle>)}
+      <text x="12" y="16" fontSize="10" className="fill-emerald-600">kWh</text><text x={W-12} y="16" textAnchor="end" fontSize="10" className="fill-amber-600">Rp</text>
+    </svg></div>;
+  }
+
   function downloadCsv(){
     const head=['Tanggal','Jumlah Snapshot','Energi Terhitung (kWh)','Estimasi Biaya (Rp)','Peak Power (W)','Jam Peak','PF Rata-rata','Fasa R (kWh)','Fasa S (kWh)','Fasa T (kWh)'];
     const data=rows.map(r=>[r.date,r.samples,r.energyKWh.toFixed(4),Math.round(r.costRp),r.peakPowerW.toFixed(2),r.peakTime,r.avgPowerFactor.toFixed(4),r.phaseA.toFixed(4),r.phaseB.toFixed(4),r.phaseC.toFixed(4)]);
@@ -99,20 +117,25 @@ export const MonthlyHistory: React.FC = () => {
     </section>
 
     <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
-      <div className="pow-card p-4"><div className="text-xs text-slate-500">Snapshot MongoDB</div><div className="text-2xl font-bold mt-1">{points.length}</div></div>
-      <div className="pow-card p-4"><div className="text-xs text-slate-500">Hari Tersedia</div><div className="text-2xl font-bold mt-1">{rows.length}</div></div>
-      <div className="pow-card p-4"><div className="text-xs text-slate-500">Energi Terhitung</div><div className="text-2xl font-bold mt-1">{fmt(total,3)} <span className="text-xs font-normal">kWh</span></div></div>
+      <div className="pow-card p-4"><div className="text-xs text-slate-500">Total Energi Periode</div><div className="text-2xl font-bold mt-1 text-emerald-600">{fmt(total,3)} <span className="text-xs font-normal">kWh</span></div></div>
+      <div className="pow-card p-4"><div className="text-xs text-slate-500">Estimasi Total Biaya</div><div className="text-2xl font-bold mt-1 text-amber-600">Rp {Math.round(totalCost).toLocaleString('id-ID')}</div><div className="text-[11px] text-slate-500 mt-1">@ Rp {TARIFF_RP_PER_KWH.toLocaleString('id-ID')}/kWh</div></div>
+      <div className="pow-card p-4"><div className="text-xs text-slate-500">Hari / Snapshot</div><div className="text-2xl font-bold mt-1">{rows.length} <span className="text-xs font-normal">hari</span></div><div className="text-[11px] text-slate-500 mt-1">{points.length} snapshot MongoDB</div></div>
       <div className="pow-card p-4"><div className="text-xs text-slate-500">Rentang Data Nyata</div><div className="text-sm font-bold mt-2">{first?first.toLocaleString('id-ID'):'Belum ada data'}</div><div className="text-xs text-slate-500">{last?'s/d '+last.toLocaleString('id-ID'):''}</div></div>
     </div>
+
+    <section className="pow-card p-5">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4"><div className="flex items-center gap-2"><BarChart3 className="w-5 h-5 text-emerald-600"/><div><h3 className="font-bold">Konsumsi Energi & Estimasi Biaya Harian</h3><p className="text-xs text-slate-500">Bar: kWh harian &bull; Line: estimasi biaya rupiah</p></div></div><div className="flex gap-3 text-xs"><span className="text-emerald-600 font-semibold">■ kWh</span><span className="text-amber-600 font-semibold">● Rupiah</span></div></div>
+      <HistoryComboChart/>
+    </section>
 
     <section className="pow-card overflow-hidden">
       <div className="p-4 border-b border-slate-200 dark:border-slate-700 flex items-center gap-2"><CalendarDays className="w-4 h-4"/><h3 className="font-bold">Rekap Harian dari MongoDB</h3></div>
       {!rows.length?<div className="p-12 text-center text-slate-500"><Zap className="w-8 h-8 mx-auto mb-3 opacity-40"/>{loading?'Mengambil data...':'Belum ada data MongoDB pada rentang tanggal ini.'}</div>:
       <div className="overflow-x-auto"><table className="w-full text-sm"><thead className="bg-slate-50 dark:bg-slate-800/60 text-xs"><tr>
-        <th className="p-3 text-left">Tanggal</th><th className="p-3 text-right">Snapshot</th><th className="p-3 text-right">Energi kWh</th><th className="p-3 text-right">Peak kW</th><th className="p-3 text-right">Jam Peak</th><th className="p-3 text-right">PF Rata-rata</th><th className="p-3 text-right">R / S / T kWh</th>
+        <th className="p-3 text-left">Tanggal</th><th className="p-3 text-right">Snapshot</th><th className="p-3 text-right">Energi kWh</th><th className="p-3 text-right">Estimasi Rp</th><th className="p-3 text-right">Peak kW</th><th className="p-3 text-right">Jam Peak</th><th className="p-3 text-right">PF Rata-rata</th><th className="p-3 text-right">R / S / T kWh</th>
       </tr></thead><tbody>{rows.map(r=><tr key={r.date} className="border-t border-slate-100 dark:border-slate-800">
         <td className="p-3 font-medium">{new Date(r.date+'T00:00:00').toLocaleDateString('id-ID',{day:'2-digit',month:'long',year:'numeric'})}</td>
-        <td className="p-3 text-right">{r.samples}</td><td className="p-3 text-right">{fmt(r.energyKWh,3)}</td><td className="p-3 text-right">{fmt(r.peakPowerW/1000,3)}</td><td className="p-3 text-right">{r.peakTime}</td><td className="p-3 text-right">{fmt(r.avgPowerFactor,3)}</td><td className="p-3 text-right">{fmt(r.phaseA,2)} / {fmt(r.phaseB,2)} / {fmt(r.phaseC,2)}</td>
+        <td className="p-3 text-right">{r.samples}</td><td className="p-3 text-right">{fmt(r.energyKWh,3)}</td><td className="p-3 text-right">Rp {Math.round(r.costRp).toLocaleString('id-ID')}</td><td className="p-3 text-right">{fmt(r.peakPowerW/1000,3)}</td><td className="p-3 text-right">{r.peakTime}</td><td className="p-3 text-right">{fmt(r.avgPowerFactor,3)}</td><td className="p-3 text-right">{fmt(r.phaseA,2)} / {fmt(r.phaseB,2)} / {fmt(r.phaseC,2)}</td>
       </tr>)}</tbody></table></div>}
     </section>
     <p className="text-[11px] text-slate-500">Energi dihitung dari daya aktif antar-snapshot MongoDB. Selang perhitungan dibatasi maksimum 15 menit agar gap data tidak menghasilkan estimasi berlebihan.</p>
