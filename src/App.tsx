@@ -41,12 +41,12 @@ export default function App() {
   const [bannerAlert, setBannerAlert] = useState<AlarmRecord | null>(null);
 
   // Tarif is kept only for realtime cost display; historical measurements come from MongoDB.
-  const [tariff] = useState<TaripPLN>({
+  const [tariff, setTariff] = useState<TaripPLN>(() => ({
     tariffName: 'Golongan B-2 / TR (Bisnis Menengah)',
-    ratePerKWh: 1444.70,
+    ratePerKWh: Number(localStorage.getItem('powmon_tariff')) || 1444.70,
     ppnPercent: 0,
     pjuPercent: 0,
-  });
+  }));
 
   // Modals
   const [isMqttModalOpen, setIsMqttModalOpen] = useState(false);
@@ -208,7 +208,7 @@ export default function App() {
         )}
 
         {activeTab === 'history' && (
-          <MonthlyHistory />
+          <MonthlyHistory ratePerKWh={tariff.ratePerKWh} />
         )}
 
         {activeTab === 'alarms' && (
@@ -264,6 +264,11 @@ export default function App() {
       <MongoDbConfigModal
         isOpen={isMongoModalOpen}
         onClose={() => setIsMongoModalOpen(false)}
+        ratePerKWh={tariff.ratePerKWh}
+        onSaveTariff={(rate) => {
+          localStorage.setItem('powmon_tariff', String(rate));
+          setTariff(prev => ({ ...prev, ratePerKWh: rate }));
+        }}
       />
     </div>
   );
