@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { CalendarDays, Download, RefreshCw, Database, Zap, BarChart3 } from 'lucide-react';
+import { CalendarDays, Download, RefreshCw, Zap, BarChart3 } from 'lucide-react';
 import { PowerMeterData } from '../types/powermeter';
 
 type MongoPoint = PowerMeterData & { savedAt: string; receivedAt?: string; energyTodayKWh?: number; energyTodayRKWh?: number; energyTodaySKWh?: number; energyTodayTKWh?: number };
@@ -8,13 +8,11 @@ type DailyRow = {
   peakTime: string; avgPowerFactor: number; phaseA: number; phaseB: number; phaseC: number; costRp: number;
 };
 
-const TARIFF_RP_PER_KWH=1444.70;
-
 const pad=(n:number)=>String(n).padStart(2,'0');
 const localDate=(d:Date)=>`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
 const fmt=(n:number,d=2)=>n.toLocaleString('id-ID',{minimumFractionDigits:d,maximumFractionDigits:d});
 
-export const MonthlyHistory: React.FC = () => {
+export const MonthlyHistory: React.FC<{ratePerKWh:number}> = ({ratePerKWh}) => {
   const now=new Date();
   const ago=new Date(now); ago.setDate(ago.getDate()-30);
   const [start,setStart]=useState(localDate(ago));
@@ -64,9 +62,9 @@ export const MonthlyHistory: React.FC = () => {
       const pf=arr.reduce((sum,p)=>sum+(p.powerFactor||0),0)/arr.length;
       return {date,samples:arr.length,energyKWh:energy,peakPowerW:peak?.activePower||0,
         peakTime:peak?new Date(peak.savedAt).toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'}):'-',
-        avgPowerFactor:pf,phaseA:aKwh,phaseB:bKwh,phaseC:cKwh,costRp:energy*TARIFF_RP_PER_KWH};
+        avgPowerFactor:pf,phaseA:aKwh,phaseB:bKwh,phaseC:cKwh,costRp:energy*ratePerKWh};
     }).sort((a,b)=>b.date.localeCompare(a.date));
-  },[points]);
+  },[points,ratePerKWh]);
 
   const total=rows.reduce((sum,r)=>sum+r.energyKWh,0);
   const totalCost=rows.reduce((sum,r)=>sum+r.costRp,0);
@@ -103,8 +101,7 @@ export const MonthlyHistory: React.FC = () => {
     <section className="pow-card p-5">
       <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4">
         <div>
-          <div className="flex items-center gap-2"><Database className="w-5 h-5 text-emerald-600"/><h2 className="text-lg font-bold">Histori Data MongoDB</h2></div>
-          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Hanya menampilkan data yang benar-benar tersimpan di database. Tidak ada data simulasi atau histori buatan.</p>
+          <div className="flex items-center gap-2"><CalendarDays className="w-5 h-5 text-emerald-600"/><h2 className="text-lg font-bold">Histori Data Harian</h2></div>
         </div>
         <div className="flex flex-wrap items-end gap-2">
           <label className="text-xs">Dari<input className="pow-input block mt-1" type="date" value={start} onChange={e=>setStart(e.target.value)}/></label>
@@ -118,19 +115,19 @@ export const MonthlyHistory: React.FC = () => {
 
     <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
       <div className="pow-card p-4"><div className="text-xs text-slate-500">Total Energi Periode</div><div className="text-2xl font-bold mt-1 text-emerald-600">{fmt(total,3)} <span className="text-xs font-normal">kWh</span></div></div>
-      <div className="pow-card p-4"><div className="text-xs text-slate-500">Estimasi Total Biaya</div><div className="text-2xl font-bold mt-1 text-amber-600">Rp {Math.round(totalCost).toLocaleString('id-ID')}</div><div className="text-[11px] text-slate-500 mt-1">@ Rp {TARIFF_RP_PER_KWH.toLocaleString('id-ID')}/kWh</div></div>
-      <div className="pow-card p-4"><div className="text-xs text-slate-500">Hari / Snapshot</div><div className="text-2xl font-bold mt-1">{rows.length} <span className="text-xs font-normal">hari</span></div><div className="text-[11px] text-slate-500 mt-1">{points.length} snapshot MongoDB</div></div>
+      <div className="pow-card p-4"><div className="text-xs text-slate-500">Estimasi Total Biaya</div><div className="text-2xl font-bold mt-1 text-amber-600">Rp {Math.round(totalCost).toLocaleString('id-ID')}</div></div>
+      <div className="pow-card p-4"><div className="text-xs text-slate-500">Jumlah Hari</div><div className="text-2xl font-bold mt-1">{rows.length} <span className="text-xs font-normal">hari</span></div></div>
       <div className="pow-card p-4"><div className="text-xs text-slate-500">Rentang Data Nyata</div><div className="text-sm font-bold mt-2">{first?first.toLocaleString('id-ID'):'Belum ada data'}</div><div className="text-xs text-slate-500">{last?'s/d '+last.toLocaleString('id-ID'):''}</div></div>
     </div>
 
     <section className="pow-card p-5">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4"><div className="flex items-center gap-2"><BarChart3 className="w-5 h-5 text-emerald-600"/><div><h3 className="font-bold">Konsumsi Energi & Estimasi Biaya Harian</h3><p className="text-xs text-slate-500">Bar: kWh harian &bull; Line: estimasi biaya rupiah</p></div></div><div className="flex gap-3 text-xs"><span className="text-emerald-600 font-semibold">■ kWh</span><span className="text-amber-600 font-semibold">● Rupiah</span></div></div>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4"><div className="flex items-center gap-2"><BarChart3 className="w-5 h-5 text-emerald-600"/><h3 className="font-bold">Konsumsi Energi & Estimasi Biaya Harian</h3></div><div className="flex gap-3 text-xs"><span className="text-emerald-600 font-semibold">■ kWh</span><span className="text-amber-600 font-semibold">● Rupiah</span></div></div>
       <HistoryComboChart/>
     </section>
 
     <section className="pow-card overflow-hidden">
-      <div className="p-4 border-b border-slate-200 dark:border-slate-700 flex items-center gap-2"><CalendarDays className="w-4 h-4"/><h3 className="font-bold">Rekap Harian dari MongoDB</h3></div>
-      {!rows.length?<div className="p-12 text-center text-slate-500"><Zap className="w-8 h-8 mx-auto mb-3 opacity-40"/>{loading?'Mengambil data...':'Belum ada data MongoDB pada rentang tanggal ini.'}</div>:
+      <div className="p-4 border-b border-slate-200 dark:border-slate-700 flex items-center gap-2"><CalendarDays className="w-4 h-4"/><h3 className="font-bold">Rekap Data Harian Energy</h3></div>
+      {!rows.length?<div className="p-12 text-center text-slate-500"><Zap className="w-8 h-8 mx-auto mb-3 opacity-40"/>{loading?'Mengambil data...':'Belum ada data pada rentang tanggal ini.'}</div>:
       <div className="overflow-x-auto"><table className="w-full text-sm"><thead className="bg-slate-50 dark:bg-slate-800/60 text-xs"><tr>
         <th className="p-3 text-left">Tanggal</th><th className="p-3 text-right">Snapshot</th><th className="p-3 text-right">Energi kWh</th><th className="p-3 text-right">Estimasi Rp</th><th className="p-3 text-right">Peak kW</th><th className="p-3 text-right">Jam Peak</th><th className="p-3 text-right">PF Rata-rata</th><th className="p-3 text-right">R / S / T kWh</th>
       </tr></thead><tbody>{rows.map(r=><tr key={r.date} className="border-t border-slate-100 dark:border-slate-800">
@@ -138,6 +135,5 @@ export const MonthlyHistory: React.FC = () => {
         <td className="p-3 text-right">{r.samples}</td><td className="p-3 text-right">{fmt(r.energyKWh,3)}</td><td className="p-3 text-right">Rp {Math.round(r.costRp).toLocaleString('id-ID')}</td><td className="p-3 text-right">{fmt(r.peakPowerW/1000,3)}</td><td className="p-3 text-right">{r.peakTime}</td><td className="p-3 text-right">{fmt(r.avgPowerFactor,3)}</td><td className="p-3 text-right">{fmt(r.phaseA,2)} / {fmt(r.phaseB,2)} / {fmt(r.phaseC,2)}</td>
       </tr>)}</tbody></table></div>}
     </section>
-    <p className="text-[11px] text-slate-500">Energi dihitung dari daya aktif antar-snapshot MongoDB. Selang perhitungan dibatasi maksimum 15 menit agar gap data tidak menghasilkan estimasi berlebihan.</p>
   </div>;
 };
