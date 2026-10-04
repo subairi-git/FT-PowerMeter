@@ -9,13 +9,8 @@ import {
   AlarmThresholds,
   AlarmRecord,
   TaripPLN,
-  MqttConnectionConfig,
 } from './types/powermeter';
-import {
-  mqttService,
-  INITIAL_POWER_DATA,
-  ConnectionStatus,
-} from './services/mqttService';
+import { INITIAL_POWER_DATA, ConnectionStatus } from './services/mqttService';
 import { alarmService, AlarmSettings } from './services/alarmService';
 import { realtimeBuffer } from './services/realtimeBuffer';
 
@@ -24,9 +19,8 @@ import { RealtimeDashboard } from './components/RealtimeDashboard';
 import { MonitoringCharts } from './components/MonitoringCharts';
 import { MonthlyHistory } from './components/MonthlyHistory';
 import { AlarmManagement } from './components/AlarmManagement';
-import { MqttConfigModal } from './components/MqttConfigModal';
 import { MongoDbConfigModal } from './components/MongoDbConfigModal';
-import { AlertTriangle, X, Bell } from 'lucide-react';
+import { AlertTriangle, X } from 'lucide-react';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<'realtime' | 'chart' | 'history' | 'alarms'>('realtime');
@@ -49,9 +43,7 @@ export default function App() {
   }));
 
   // Modals
-  const [isMqttModalOpen, setIsMqttModalOpen] = useState(false);
   const [isMongoModalOpen, setIsMongoModalOpen] = useState(false);
-  const [mqttConfig, setMqttConfig] = useState<MqttConnectionConfig>(mqttService.getConfig());
 
   const [todayKWh, setTodayKWh] = useState(0);
   const todayCost = Math.round(todayKWh * tariff.ratePerKWh);
@@ -70,53 +62,41 @@ export default function App() {
     return () => { active = false; window.clearInterval(timer); };
   }, []);
 
-  // Initialize and subscribe to services
+  // Frontend receives realtime telemetry from the Render server.
   useEffect(() => {
-    // 1. Subscribe to MQTT Status
-    const unsubStatus = mqttService.subscribeStatus((status) => {
-      setMqttStatus(status);
-    });
-
-    // 2. Subscribe to MQTT Telemetry Data
-    const unsubData = mqttService.subscribeData((newData) => {
-      setPowerData(newData);
-      setPacketCount((prev) => prev + 1);
-      realtimeBuffer.push(newData);
-
-      // Check alarms against thresholds
-      alarmService.evaluateTelemetry(newData);
-
-    });
-
-    // 3. Subscribe to Alarm Records
-    const unsubAlarms = alarmService.subscribeAlarms((updatedAlarms) => {
-      setAlarms(updatedAlarms);
-      const activeCrit = updatedAlarms.find((a) => a.status === 'active' && a.severity === 'critical');
-      if (activeCrit) {
-        setBannerAlert(activeCrit);
+    let active=true;
+    let lastReceivedAt:string|null=null;
+    const loadRealtime=async()=>{
+      try{
+        const res=await fetch('/api/realtime',{cache:'no-store'});
+        const json=await res.json();
+        if(!active)return;
+        setMqttStatus(json?.mqtt?.connected?'connected':'disconnected');
+        setPacketCount(Number(json?.mqtt?.packetCount||0));
+        if(res.ok&&json.success&&json.data&&json.receivedAt!==lastReceivedAt){
+          lastReceivedAt=json.receivedAt;
+          const newData:PowerMeterData={...json.data,timestamp:Date.now()};
+          setPowerData(newData);
+          realtimeBuffer.push(newData);
+          alarmService.evaluateTelemetry(newData);
+        }
+      }catch{
+        if(active)setMqttStatus('error');
       }
-    });
-
-
-    // Connect to HiveMQ automatically on mount
-    mqttService.connect();
-
-    return () => {
-      unsubStatus();
-      unsubData();
-      unsubAlarms();
-      mqttService.disconnect();
     };
+    const unsubAlarms=alarmService.subscribeAlarms((updatedAlarms)=>{
+      setAlarms(updatedAlarms);
+      const activeCrit=updatedAlarms.find((a)=>a.status==='active'&&a.severity==='critical');
+      if(activeCrit)setBannerAlert(activeCrit);
+    });
+    setMqttStatus('connecting');
+    loadRealtime();
+    const timer=window.setInterval(loadRealtime,2000);
+    return()=>{active=false;window.clearInterval(timer);unsubAlarms();};
   }, []);
 
-
-  const handleInjectCustomData = (partial: Partial<PowerMeterData>) => {
-    mqttService.injectCustomData(partial);
-  };
-
-  const handleResetToDefault = () => {
-    mqttService.injectCustomData(INITIAL_POWER_DATA);
-  };
+  const handleInjectCustomData = (_partial: Partial<PowerMeterData>) => {};
+  const handleResetToDefault = () => {};
 
   const handleUpdateThresholds = (newThresh: Partial<AlarmThresholds>) => {
     alarmService.updateThresholds(newThresh);
@@ -155,7 +135,6 @@ export default function App() {
         setActiveTab={setActiveTab}
         mqttStatus={mqttStatus}
         activeAlarmsCount={activeAlarmsCount}
-        onOpenMqttModal={() => setIsMqttModalOpen(true)}
         onOpenMongoModal={() => setIsMongoModalOpen(true)}
         packetCount={packetCount}
       />
@@ -253,19 +232,6 @@ export default function App() {
       </footer>
 
       {/* Modals */}
-      <MqttConfigModal
-        isOpen={isMqttModalOpen}
-        onClose={() => setIsMqttModalOpen(false)}
-        status={mqttStatus}
-        config={mqttConfig}
-        onSaveConfig={(cfg) => {
-          setMqttConfig((prev) => ({ ...prev, ...cfg }));
-        }}
-        onTestPublish={(payload) => {
-          mqttService.publishData(payload);
-        }}
-      />
-
       <MongoDbConfigModal
         isOpen={isMongoModalOpen}
         onClose={() => setIsMongoModalOpen(false)}
