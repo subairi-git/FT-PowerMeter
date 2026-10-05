@@ -92,7 +92,7 @@ export const MonthlyHistory: React.FC<{ratePerKWh:number}> = ({ratePerKWh}) => {
   function downloadCsv(){
     const head=['Tanggal','Jumlah Snapshot','Energi Terhitung (kWh)','Estimasi Biaya (Rp)','Peak Power (W)','Jam Peak','PF Rata-rata','Fasa R (kWh)','Fasa S (kWh)','Fasa T (kWh)'];
     const data=rows.map(r=>[r.date,r.samples,r.energyKWh.toFixed(4),Math.round(r.costRp),r.peakPowerW.toFixed(2),r.peakTime,r.avgPowerFactor.toFixed(4),r.phaseA.toFixed(4),r.phaseB.toFixed(4),r.phaseC.toFixed(4)]);
-    const csv='\uFEFF'+[head,...data].map(r=>r.join(',')).join('\\n');
+    const csv='\uFEFF'+[head,...data].map(r=>r.join(',')).join(String.fromCharCode(13,10));
     const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));
     a.download=`powmon_histori_${start}_sd_${end}.csv`;a.click();URL.revokeObjectURL(a.href);
   }
