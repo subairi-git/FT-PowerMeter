@@ -252,7 +252,7 @@ app.get('/api/energy-today', (_req, res) => {
 app.get('/api/realtime', (_req, res) => {
   const connected = Boolean(mqttClient?.connected);
   const messageAgeMs = lastMqttAt ? Date.now() - lastMqttAt.getTime() : null;
-  const telemetryActive = connected && messageAgeMs !== null && messageAgeMs < 15000;
+  const telemetryActive = connected && messageAgeMs !== null && messageAgeMs <= 15000;
   res.status(latestData ? 200 : 503).json({
     success: Boolean(latestData),
     mqtt: { connected, telemetryActive, topic: MQTT_TOPIC, packetCount, lastMessageAt: lastMqttAt, messageAgeMs },
