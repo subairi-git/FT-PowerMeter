@@ -71,7 +71,7 @@ export default function App() {
         const res=await fetch('/api/realtime',{cache:'no-store'});
         const json=await res.json();
         if(!active)return;
-        setMqttStatus(json?.mqtt?.connected?'connected':'disconnected');
+        setMqttStatus(json?.mqtt?.telemetryActive?'connected':json?.mqtt?.connected?'connecting':'disconnected');
         setPacketCount(Number(json?.mqtt?.packetCount||0));
         if(res.ok&&json.success&&json.data&&json.receivedAt!==lastReceivedAt){
           lastReceivedAt=json.receivedAt;
