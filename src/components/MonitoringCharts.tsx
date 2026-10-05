@@ -53,7 +53,7 @@ export function MonitoringCharts({liveData}:{liveData:PowerMeterData}) {
   function downloadCsv(){
     const headers=['Waktu','Daya Total (kW)','Daya R (kW)','Daya S (kW)','Daya T (kW)','Arus R (A)','Arus S (A)','Arus T (A)','Tegangan R (V)','Tegangan S (V)','Tegangan T (V)','CosPhi Total','CosPhi R','CosPhi S','CosPhi T','Frekuensi (Hz)'];
     const rows=history.map(p=>[new Date(p.at).toLocaleString('id-ID'),p.activePower/1000,p.activePowerA/1000,p.activePowerB/1000,p.activePowerC/1000,p.currentA,p.currentB,p.currentC,p.voltageA,p.voltageB,p.voltageC,p.powerFactor,p.powerFactorA,p.powerFactorB,p.powerFactorC,p.frequency]);
-    const csv='\uFEFF'+[headers,...rows].map(r=>r.join(',')).join('\\n'); const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));a.download=`powmon_${start.slice(0,10)}_${end.slice(0,10)}.csv`;a.click();URL.revokeObjectURL(a.href);
+    const csv='\uFEFF'+[headers,...rows].map(r=>r.join(',')).join(String.fromCharCode(13,10)); const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));a.download=`powmon_${start.slice(0,10)}_${end.slice(0,10)}.csv`;a.click();URL.revokeObjectURL(a.href);
   }
   const latest=data[data.length-1]||({...liveData,at:new Date().toISOString()} as Point);
   const metrics=useMemo(()=>[
