@@ -14,7 +14,8 @@ const DB_NAME = process.env.MONGODB_DB || 'powermeter_db';
 const COLLECTION_NAME = process.env.MONGODB_COLLECTION || 'power_readings';
 const MQTT_BROKER_URL = process.env.MQTT_BROKER_URL || process.env.MQTT_BROKER || 'mqtt://broker.hivemq.com:1883';
 const MQTT_TOPIC = process.env.MQTT_TOPIC || 'andrian/powermeter/data';
-const MQTT_CLIENT_ID = process.env.MQTT_CLIENT_ID || `ft_powermeter_render_${Math.random().toString(16).slice(2, 10)}`;
+const MQTT_CLIENT_ID_PREFIX = process.env.MQTT_CLIENT_ID || 'powmon_server';
+const MQTT_CLIENT_ID = `${MQTT_CLIENT_ID_PREFIX}_${process.pid}_${Math.random().toString(16).slice(2, 8)}`;
 const SAVE_INTERVAL_MS = Number(process.env.SAVE_INTERVAL_MS || 300000);
 
 if (!MONGODB_URI) {
@@ -114,9 +115,10 @@ function connectMqtt() {
   mqttClient = mqtt.connect(MQTT_BROKER_URL, {
     clientId: MQTT_CLIENT_ID,
     clean: true,
-    keepalive: 60,
-    connectTimeout: 10000,
-    reconnectPeriod: 5000,
+    keepalive: 30,
+    connectTimeout: 15000,
+    reconnectPeriod: 3000,
+    resubscribe: true,
   });
 
   mqttClient.on('connect', () => {
@@ -141,6 +143,7 @@ function connectMqtt() {
   });
 
   mqttClient.on('reconnect', () => console.log('[MQTT] Reconnecting...'));
+  mqttClient.on('offline', () => console.log('[MQTT] Client offline'));
   mqttClient.on('close', () => console.log('[MQTT] Connection closed'));
   mqttClient.on('error', (error) => console.error('[MQTT] Error:', error.message));
 }
@@ -248,9 +251,11 @@ app.get('/api/energy-today', (_req, res) => {
 
 app.get('/api/realtime', (_req, res) => {
   const connected = Boolean(mqttClient?.connected);
+  const messageAgeMs = lastMqttAt ? Date.now() - lastMqttAt.getTime() : null;
+  const telemetryActive = connected && messageAgeMs !== null && messageAgeMs < 15000;
   res.status(latestData ? 200 : 503).json({
     success: Boolean(latestData),
-    mqtt: { connected, topic: MQTT_TOPIC, packetCount, lastMessageAt: lastMqttAt },
+    mqtt: { connected, telemetryActive, topic: MQTT_TOPIC, packetCount, lastMessageAt: lastMqttAt, messageAgeMs },
     receivedAt: lastMqttAt,
     data: latestData,
   });
