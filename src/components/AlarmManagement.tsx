@@ -100,7 +100,7 @@ export const AlarmManagement: React.FC<AlarmManagementProps> = ({
       a.status,
       `"${a.message.replace(/"/g, '""')}"`,
     ]);
-    const csvContent = [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
+    const csvContent = [headers.join(','), ...rows.map((r) => r.join(','))].join(String.fromCharCode(13,10));
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
