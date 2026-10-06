@@ -40,13 +40,14 @@ function GaugeMetric({label,value,unit,statusColor,featured=false}:{label:string
   const arc=`M ${startX} ${startY} A ${r} ${r} 0 0 1 ${endX} ${endY}`;
   const active=`M ${startX} ${startY} A ${r} ${r} 0 0 1 ${nx.toFixed(2)} ${ny.toFixed(2)}`;
   return <div className={`pow-card text-center flex flex-col justify-center min-w-0 ${featured ? 'p-5 lg:row-span-2' : 'p-3'}`}>
+    <div className={`font-extrabold leading-none ${featured ? 'text-3xl sm:text-4xl mb-2' : 'text-lg sm:text-xl mb-1'}`}>
+      {value} <span className={`font-medium text-slate-400 ${featured ? 'text-sm' : 'text-[10px]'}`}>{unit}</span>
+    </div>
     <svg viewBox="0 0 120 88" className={`w-full mx-auto ${featured ? 'max-w-[270px]' : 'max-w-[135px]'}`}>
       <path d={arc} fill="none" stroke="currentColor" opacity=".10" strokeWidth="9" strokeLinecap="round"/>
       <path d={active} fill="none" stroke={statusColor} strokeWidth="9" strokeLinecap="round"/>
       <line x1={cx} y1={cy} x2={nx} y2={ny} stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
       <circle cx={cx} cy={cy} r="4" fill="currentColor"/>
-      <text x="60" y="61" textAnchor="middle" fontSize="15" fontWeight="800" fill="currentColor">{value}</text>
-      <text x="60" y="73" textAnchor="middle" fontSize="7" fill="currentColor" opacity=".55">{unit}</text>
     </svg>
     <div className={`font-medium text-slate-500 dark:text-slate-400 -mt-1 ${featured ? 'text-sm' : 'text-[10px] sm:text-[11px]'}`}>{label}</div>
   </div>
