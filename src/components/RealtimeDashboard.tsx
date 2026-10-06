@@ -20,6 +20,7 @@ interface RealtimeDashboardProps {
   tariff: TaripPLN;
   todayKWh: number;
   todayCost: number;
+  breakerCapacityA: number;
   onInjectTestValue?: (partial: Partial<PowerMeterData>) => void;
   onResetToDefault?: () => void;
 }
@@ -29,6 +30,7 @@ export const RealtimeDashboard: React.FC<RealtimeDashboardProps> = ({
   tariff,
   todayKWh,
   todayCost,
+  breakerCapacityA,
   onInjectTestValue,
   onResetToDefault,
 }) => {
@@ -304,12 +306,12 @@ export const RealtimeDashboard: React.FC<RealtimeDashboardProps> = ({
               <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden">
                 <div
                   className="bg-rose-500 h-2 rounded-full transition-all duration-500"
-                  style={{ width: `${Math.min(100, (data.currentA / 25) * 100)}%` }}
+                  style={{ width: `${Math.min(100, (data.currentA / Math.max(breakerCapacityA, 0.1)) * 100)}%` }}
                 ></div>
               </div>
               <div className="flex justify-between text-[10px] text-slate-500 mt-1">
                 <span>0 A</span>
-                <span>Kapasitas Breaker 25 A</span>
+                <span>Kapasitas Breaker {formatNumber(breakerCapacityA, 1)} A</span>
               </div>
             </div>
           </div>
@@ -373,12 +375,12 @@ export const RealtimeDashboard: React.FC<RealtimeDashboardProps> = ({
               <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden">
                 <div
                   className="bg-amber-500 h-2 rounded-full transition-all duration-500"
-                  style={{ width: `${Math.min(100, (data.currentB / 25) * 100)}%` }}
+                  style={{ width: `${Math.min(100, (data.currentB / Math.max(breakerCapacityA, 0.1)) * 100)}%` }}
                 ></div>
               </div>
               <div className="flex justify-between text-[10px] text-slate-500 mt-1">
                 <span>0 A</span>
-                <span>Kapasitas Breaker 25 A</span>
+                <span>Kapasitas Breaker {formatNumber(breakerCapacityA, 1)} A</span>
               </div>
             </div>
           </div>
@@ -442,12 +444,12 @@ export const RealtimeDashboard: React.FC<RealtimeDashboardProps> = ({
               <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden">
                 <div
                   className="bg-sky-500 h-2 rounded-full transition-all duration-500"
-                  style={{ width: `${Math.min(100, (data.currentC / 25) * 100)}%` }}
+                  style={{ width: `${Math.min(100, (data.currentC / Math.max(breakerCapacityA, 0.1)) * 100)}%` }}
                 ></div>
               </div>
               <div className="flex justify-between text-[10px] text-slate-500 mt-1">
                 <span>0 A</span>
-                <span>Kapasitas Breaker 25 A</span>
+                <span>Kapasitas Breaker {formatNumber(breakerCapacityA, 1)} A</span>
               </div>
             </div>
           </div>
