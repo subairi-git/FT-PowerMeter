@@ -110,7 +110,7 @@ export function MonitoringCharts({liveData,thresholds}:{liveData:PowerMeterData;
   return <div className="space-y-5">
     <section className="pow-card p-4 sm:p-5">
       <div className="flex flex-col xl:flex-row xl:items-end justify-between gap-4">
-        <div><div className="flex items-center gap-2 text-blue-500"><BarChart3 className="w-5 h-5"/><span className="font-bold text-base">Monitoring Grafik</span></div><p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Realtime menampilkan 100 sampel terakhir dari RAM. Histori MongoDB tersimpan setiap 5 menit.</p></div>
+        <div><div className="flex items-center gap-2 text-blue-500"><BarChart3 className="w-5 h-5"/><span className="font-bold text-base">Monitoring Grafik</span></div><p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Telemetry Realtime Data</p></div>
         <div className="flex flex-wrap items-end gap-2">
           <button onClick={()=>setMode('realtime')} className={`pow-btn ${mode==='realtime'?'pow-btn-primary':'pow-btn-soft'}`}><Radio className="w-4 h-4"/>Realtime</button>
           <label className="text-[11px]">Dari<input type="datetime-local" value={start} onChange={e=>setStart(e.target.value)} className="pow-input block mt-1"/></label>
