@@ -39,7 +39,7 @@ function GaugeMetric({label,value,unit,index,featured=false}:{label:string;value
   const nx=cx+r*Math.cos(angle), ny=cy-r*Math.sin(angle);
   const arc=`M ${startX} ${startY} A ${r} ${r} 0 0 1 ${endX} ${endY}`;
   const active=`M ${startX} ${startY} A ${r} ${r} 0 0 1 ${nx.toFixed(2)} ${ny.toFixed(2)}`;
-  return <div className={`pow-card text-center flex flex-col justify-center ${featured ? 'p-5 md:col-span-2 md:row-span-2' : 'p-3'}`}>
+  return <div className={`pow-card text-center flex flex-col justify-center min-w-0 ${featured ? 'p-5 lg:row-span-2' : 'p-3'}`}>
     <svg viewBox="0 0 120 88" className={`w-full mx-auto ${featured ? 'max-w-[270px]' : 'max-w-[135px]'}`}>
       <path d={arc} fill="none" stroke="currentColor" opacity=".10" strokeWidth="9" strokeLinecap="round"/>
       <path d={active} fill="none" stroke={colors[index%4]} strokeWidth="9" strokeLinecap="round"/>
@@ -97,7 +97,7 @@ export function MonitoringCharts({liveData}:{liveData:PowerMeterData}) {
         </div>
       </div>{error&&<p className="mt-3 text-sm text-rose-500">{error}</p>}
     </section>
-    <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-6 auto-rows-fr gap-3">{metrics.map((m,i)=><GaugeMetric key={m[0]} label={m[0]} value={m[1]} unit={m[2]} index={i} featured={i===0}/>)}</div>
+    <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-[minmax(240px,2fr)_repeat(5,minmax(120px,1fr))] lg:grid-rows-2 auto-rows-fr gap-3">{metrics.map((m,i)=><GaugeMetric key={m[0]} label={m[0]} value={m[1]} unit={m[2]} index={i} featured={i===0}/>)}</div>
     {!data.length?<div className="pow-card p-12 text-center text-slate-500"><Zap className="w-8 h-8 mx-auto mb-3 opacity-40"/>{mode==='realtime'?'Menunggu data MQTT realtime...':'Pilih rentang tanggal lalu klik Tampilkan.'}</div>:
     <div className="grid xl:grid-cols-2 gap-4">
       <LineChart title="Daya Total" unit="kW" data={data} series={[{key:'activePower',label:'Daya Total',color:colors[0],divisor:1000}]}/>
