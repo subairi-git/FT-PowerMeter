@@ -184,7 +184,7 @@ export default function App() {
         )}
 
         {activeTab === 'chart' && (
-          <MonitoringCharts liveData={powerData} />
+          <MonitoringCharts liveData={powerData} thresholds={thresholds} />
         )}
 
         {activeTab === 'history' && (
