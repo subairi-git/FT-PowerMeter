@@ -95,8 +95,6 @@ export default function App() {
     return()=>{active=false;window.clearInterval(timer);unsubAlarms();};
   }, []);
 
-  const handleInjectCustomData = (_partial: Partial<PowerMeterData>) => {};
-  const handleResetToDefault = () => {};
 
   const handleUpdateThresholds = (newThresh: Partial<AlarmThresholds>) => {
     alarmService.updateThresholds(newThresh);
@@ -178,8 +176,6 @@ export default function App() {
             todayKWh={todayKWh}
             todayCost={todayCost}
             breakerCapacityA={thresholds.currentMax}
-            onInjectTestValue={handleInjectCustomData}
-            onResetToDefault={handleResetToDefault}
           />
         )}
 
@@ -213,22 +209,8 @@ export default function App() {
 
       {/* Footer */}
       <footer className="mt-auto border-t border-slate-200/80 bg-white py-4 text-xs text-slate-500">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-2 text-center sm:text-left">
-          <div>
-            <span className="font-semibold text-slate-700">PowMon</span> &bull; Power Management Gedung Fakultas Teknik
-          </div>
-          <div className="flex items-center gap-3">
-            <span>Broker: broker.hivemq.com</span>
-            <span>&bull;</span>
-            <span>Topik: andrian/powermeter/data</span>
-            <span>&bull;</span>
-            <button
-              onClick={() => setIsMongoModalOpen(true)}
-              className="text-emerald-700 hover:underline font-medium cursor-pointer"
-            >
-              MongoDB Atlas Config
-            </button>
-          </div>
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+          <span>Powered by: </span><span className="font-semibold text-slate-700">Teknik Elektro Unmer</span>
         </div>
       </footer>
 
