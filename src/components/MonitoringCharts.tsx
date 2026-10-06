@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { BarChart3, Download, Radio, Search, Zap } from 'lucide-react';
-import { PowerMeterData } from '../types/powermeter';
+import { PowerMeterData, AlarmThresholds } from '../types/powermeter';
 import { realtimeBuffer } from '../services/realtimeBuffer';
 
 type Point = PowerMeterData & { at: string };
@@ -30,7 +30,7 @@ function LineChart({title, unit, data, series}:{title:string;unit:string;data:Po
   </div>
 }
 
-function GaugeMetric({label,value,unit,index,featured=false}:{label:string;value:string;unit:string;index:number;featured?:boolean}) {
+function GaugeMetric({label,value,unit,statusColor,featured=false}:{label:string;value:string;unit:string;statusColor:string;featured?:boolean}) {
   const numeric=Number(value)||0;
   const ranges = label.includes('Tegangan') ? [180,260] : label.includes('Arus') ? [0,50] : label.includes('Cos') ? [0,1] : [0,20];
   const pct=Math.max(0,Math.min(1,(numeric-ranges[0])/(ranges[1]-ranges[0])));
@@ -42,7 +42,7 @@ function GaugeMetric({label,value,unit,index,featured=false}:{label:string;value
   return <div className={`pow-card text-center flex flex-col justify-center min-w-0 ${featured ? 'p-5 lg:row-span-2' : 'p-3'}`}>
     <svg viewBox="0 0 120 88" className={`w-full mx-auto ${featured ? 'max-w-[270px]' : 'max-w-[135px]'}`}>
       <path d={arc} fill="none" stroke="currentColor" opacity=".10" strokeWidth="9" strokeLinecap="round"/>
-      <path d={active} fill="none" stroke={colors[index%4]} strokeWidth="9" strokeLinecap="round"/>
+      <path d={active} fill="none" stroke={statusColor} strokeWidth="9" strokeLinecap="round"/>
       <line x1={cx} y1={cy} x2={nx} y2={ny} stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
       <circle cx={cx} cy={cy} r="4" fill="currentColor"/>
       <text x="60" y="61" textAnchor="middle" fontSize="15" fontWeight="800" fill="currentColor">{value}</text>
@@ -52,7 +52,7 @@ function GaugeMetric({label,value,unit,index,featured=false}:{label:string;value
   </div>
 }
 
-export function MonitoringCharts({liveData}:{liveData:PowerMeterData}) {
+export function MonitoringCharts({liveData,thresholds}:{liveData:PowerMeterData;thresholds:AlarmThresholds}) {
   const now=new Date(); const startDefault=new Date(now); startDefault.setHours(0,0,0,0);
   const [mode,setMode]=useState<'realtime'|'history'>('realtime');
   const [live,setLive]=useState<Point[]>(() => realtimeBuffer.getAll());
@@ -78,12 +78,34 @@ export function MonitoringCharts({liveData}:{liveData:PowerMeterData}) {
     const csv='\uFEFF'+[headers,...rows].map(r=>r.join(',')).join(String.fromCharCode(13,10)); const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));a.download=`powmon_${start.slice(0,10)}_${end.slice(0,10)}.csv`;a.click();URL.revokeObjectURL(a.href);
   }
   const latest=data[data.length-1]||({...liveData,at:new Date().toISOString()} as Point);
+  const gaugeColor=(value:number,min?:number,max?:number)=>{
+    const green='#22c55e', orange='#f59e0b', red='#ef4444';
+    if(min!==undefined&&value<=min)return red;
+    if(max!==undefined&&value>=max)return red;
+    if(min!==undefined){
+      const safeSpan=max!==undefined?max-min:Math.max(Math.abs(min)*0.2,0.05);
+      if(value<=min+safeSpan*0.2)return orange;
+    }
+    if(max!==undefined){
+      const safeSpan=min!==undefined?max-min:Math.max(Math.abs(max)*0.2,1);
+      if(value>=max-safeSpan*0.2)return orange;
+    }
+    return green;
+  };
+  const phasePowerMax=thresholds.activePowerMax/3;
   const metrics=useMemo(()=>[
-    ['Daya Total',(latest.activePower/1000).toFixed(3),'kW'],
-    ['Daya R',(latest.activePowerA/1000).toFixed(3),'kW'],['Daya S',(latest.activePowerB/1000).toFixed(3),'kW'],['Daya T',(latest.activePowerC/1000).toFixed(3),'kW'],
-    ['Arus R',latest.currentA.toFixed(2),'A'],['Arus S',latest.currentB.toFixed(2),'A'],['Arus T',latest.currentC.toFixed(2),'A'],
-    ['Tegangan R',latest.voltageA.toFixed(1),'V'],['Tegangan S',latest.voltageB.toFixed(1),'V'],['Tegangan T',latest.voltageC.toFixed(1),'V'],['Cos φ',latest.powerFactor.toFixed(3),'']
-  ],[latest]);
+    ['Daya Total',(latest.activePower/1000).toFixed(3),'kW',gaugeColor(latest.activePower,undefined,thresholds.activePowerMax)],
+    ['Daya R',(latest.activePowerA/1000).toFixed(3),'kW',gaugeColor(latest.activePowerA,undefined,phasePowerMax)],
+    ['Daya S',(latest.activePowerB/1000).toFixed(3),'kW',gaugeColor(latest.activePowerB,undefined,phasePowerMax)],
+    ['Daya T',(latest.activePowerC/1000).toFixed(3),'kW',gaugeColor(latest.activePowerC,undefined,phasePowerMax)],
+    ['Arus R',latest.currentA.toFixed(2),'A',gaugeColor(latest.currentA,undefined,thresholds.currentMax)],
+    ['Arus S',latest.currentB.toFixed(2),'A',gaugeColor(latest.currentB,undefined,thresholds.currentMax)],
+    ['Arus T',latest.currentC.toFixed(2),'A',gaugeColor(latest.currentC,undefined,thresholds.currentMax)],
+    ['Tegangan R',latest.voltageA.toFixed(1),'V',gaugeColor(latest.voltageA,thresholds.voltageMin,thresholds.voltageMax)],
+    ['Tegangan S',latest.voltageB.toFixed(1),'V',gaugeColor(latest.voltageB,thresholds.voltageMin,thresholds.voltageMax)],
+    ['Tegangan T',latest.voltageC.toFixed(1),'V',gaugeColor(latest.voltageC,thresholds.voltageMin,thresholds.voltageMax)],
+    ['Cos φ',latest.powerFactor.toFixed(3),'',gaugeColor(latest.powerFactor,thresholds.powerFactorMin,undefined)]
+  ],[latest,thresholds,phasePowerMax]);
   return <div className="space-y-5">
     <section className="pow-card p-4 sm:p-5">
       <div className="flex flex-col xl:flex-row xl:items-end justify-between gap-4">
@@ -97,7 +119,7 @@ export function MonitoringCharts({liveData}:{liveData:PowerMeterData}) {
         </div>
       </div>{error&&<p className="mt-3 text-sm text-rose-500">{error}</p>}
     </section>
-    <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-[minmax(240px,2fr)_repeat(5,minmax(120px,1fr))] lg:grid-rows-2 auto-rows-fr gap-3">{metrics.map((m,i)=><GaugeMetric key={m[0]} label={m[0]} value={m[1]} unit={m[2]} index={i} featured={i===0}/>)}</div>
+    <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-[minmax(240px,2fr)_repeat(5,minmax(120px,1fr))] lg:grid-rows-2 auto-rows-fr gap-3">{metrics.map((m,i)=><GaugeMetric key={m[0]} label={m[0]} value={m[1]} unit={m[2]} statusColor={m[3]} featured={i===0}/>)}</div>
     {!data.length?<div className="pow-card p-12 text-center text-slate-500"><Zap className="w-8 h-8 mx-auto mb-3 opacity-40"/>{mode==='realtime'?'Menunggu data MQTT realtime...':'Pilih rentang tanggal lalu klik Tampilkan.'}</div>:
     <div className="grid xl:grid-cols-2 gap-4">
       <LineChart title="Daya Total" unit="kW" data={data} series={[{key:'activePower',label:'Daya Total',color:colors[0],divisor:1000}]}/>
