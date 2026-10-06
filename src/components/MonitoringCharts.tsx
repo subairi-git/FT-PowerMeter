@@ -30,7 +30,7 @@ function LineChart({title, unit, data, series}:{title:string;unit:string;data:Po
   </div>
 }
 
-function GaugeMetric({label,value,unit,index}:{label:string;value:string;unit:string;index:number}) {
+function GaugeMetric({label,value,unit,index,featured=false}:{label:string;value:string;unit:string;index:number;featured?:boolean}) {
   const numeric=Number(value)||0;
   const ranges = label.includes('Tegangan') ? [180,260] : label.includes('Arus') ? [0,50] : label.includes('Cos') ? [0,1] : [0,20];
   const pct=Math.max(0,Math.min(1,(numeric-ranges[0])/(ranges[1]-ranges[0])));
@@ -39,8 +39,8 @@ function GaugeMetric({label,value,unit,index}:{label:string;value:string;unit:st
   const nx=cx+r*Math.cos(angle), ny=cy-r*Math.sin(angle);
   const arc=`M ${startX} ${startY} A ${r} ${r} 0 0 1 ${endX} ${endY}`;
   const active=`M ${startX} ${startY} A ${r} ${r} 0 0 1 ${nx.toFixed(2)} ${ny.toFixed(2)}`;
-  return <div className="pow-card p-3 text-center">
-    <svg viewBox="0 0 120 88" className="w-full max-w-[135px] mx-auto">
+  return <div className={`pow-card text-center flex flex-col justify-center ${featured ? 'p-5 md:col-span-2 md:row-span-2' : 'p-3'}`}>
+    <svg viewBox="0 0 120 88" className={`w-full mx-auto ${featured ? 'max-w-[270px]' : 'max-w-[135px]'}`}>
       <path d={arc} fill="none" stroke="currentColor" opacity=".10" strokeWidth="9" strokeLinecap="round"/>
       <path d={active} fill="none" stroke={colors[index%4]} strokeWidth="9" strokeLinecap="round"/>
       <line x1={cx} y1={cy} x2={nx} y2={ny} stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
@@ -48,7 +48,7 @@ function GaugeMetric({label,value,unit,index}:{label:string;value:string;unit:st
       <text x="60" y="61" textAnchor="middle" fontSize="15" fontWeight="800" fill="currentColor">{value}</text>
       <text x="60" y="73" textAnchor="middle" fontSize="7" fill="currentColor" opacity=".55">{unit}</text>
     </svg>
-    <div className="text-[10px] sm:text-[11px] font-medium text-slate-500 dark:text-slate-400 -mt-1">{label}</div>
+    <div className={`font-medium text-slate-500 dark:text-slate-400 -mt-1 ${featured ? 'text-sm' : 'text-[10px] sm:text-[11px]'}`}>{label}</div>
   </div>
 }
 
@@ -97,7 +97,7 @@ export function MonitoringCharts({liveData}:{liveData:PowerMeterData}) {
         </div>
       </div>{error&&<p className="mt-3 text-sm text-rose-500">{error}</p>}
     </section>
-    <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-6 gap-3">{metrics.map((m,i)=><GaugeMetric key={m[0]} label={m[0]} value={m[1]} unit={m[2]} index={i}/>)}</div>
+    <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-6 auto-rows-fr gap-3">{metrics.map((m,i)=><GaugeMetric key={m[0]} label={m[0]} value={m[1]} unit={m[2]} index={i} featured={i===0}/>)}</div>
     {!data.length?<div className="pow-card p-12 text-center text-slate-500"><Zap className="w-8 h-8 mx-auto mb-3 opacity-40"/>{mode==='realtime'?'Menunggu data MQTT realtime...':'Pilih rentang tanggal lalu klik Tampilkan.'}</div>:
     <div className="grid xl:grid-cols-2 gap-4">
       <LineChart title="Daya Total" unit="kW" data={data} series={[{key:'activePower',label:'Daya Total',color:colors[0],divisor:1000}]}/>
