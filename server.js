@@ -288,6 +288,61 @@ app.get('/api/history', async (req, res) => {
   }
 });
 
+app.get('/api/history-daily', async (req, res) => {
+  try {
+    if (!readingsCollection) throw new Error('MongoDB belum terhubung');
+    const start = req.query.start ? String(req.query.start) : null;
+    const end = req.query.end ? String(req.query.end) : null;
+    const match = { energyDate: { $type: 'string' }, energyTodayKWh: { $type: 'number' } };
+    if (start || end) {
+      match.energyDate = {};
+      if (start) match.energyDate.$gte = start;
+      if (end) match.energyDate.$lte = end;
+    }
+    const data = await readingsCollection.aggregate([
+      { $match: match },
+      { $sort: { savedAt: 1 } },
+      { $group: {
+        _id: '$energyDate',
+        samples: { $sum: 1 },
+        energyKWh: { $max: '$energyTodayKWh' },
+        phaseA: { $max: '$energyTodayRKWh' },
+        phaseB: { $max: '$energyTodaySKWh' },
+        phaseC: { $max: '$energyTodayTKWh' },
+        peakPowerW: { $max: '$activePower' },
+        avgPowerFactor: { $avg: '$powerFactor' },
+        firstSavedAt: { $min: '$savedAt' },
+        lastSavedAt: { $max: '$savedAt' }
+      }},
+      { $sort: { _id: -1 } }
+    ]).toArray();
+
+    // Peak time is resolved with one indexed lookup per returned day, keeping the payload daily-sized.
+    const rows = await Promise.all(data.map(async (row) => {
+      const peak = await readingsCollection.find({
+        energyDate: row._id,
+        activePower: row.peakPowerW
+      }).sort({ savedAt: 1 }).limit(1).next();
+      return {
+        date: row._id,
+        samples: row.samples,
+        energyKWh: Number(row.energyKWh || 0),
+        phaseA: Number(row.phaseA || 0),
+        phaseB: Number(row.phaseB || 0),
+        phaseC: Number(row.phaseC || 0),
+        peakPowerW: Number(row.peakPowerW || 0),
+        peakTime: peak?.savedAt || null,
+        avgPowerFactor: Number(row.avgPowerFactor || 0),
+        firstSavedAt: row.firstSavedAt,
+        lastSavedAt: row.lastSavedAt
+      };
+    }));
+    res.json({ success: true, count: rows.length, data: rows });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error instanceof Error ? error.message : String(error) });
+  }
+});
+
 // Endpoint manual untuk memastikan database/collection benar-benar menerima write.
 app.post('/api/test-write', async (_req, res) => {
   try {
