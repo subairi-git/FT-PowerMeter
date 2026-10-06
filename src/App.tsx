@@ -177,6 +177,7 @@ export default function App() {
             tariff={tariff}
             todayKWh={todayKWh}
             todayCost={todayCost}
+            breakerCapacityA={thresholds.currentMax}
             onInjectTestValue={handleInjectCustomData}
             onResetToDefault={handleResetToDefault}
           />
