@@ -8,8 +8,6 @@ import {
   AlertTriangle,
   ArrowUpRight,
   ShieldCheck,
-  Sparkles,
-  RefreshCw,
   Cpu,
 } from 'lucide-react';
 import { PowerMeterData, TaripPLN } from '../types/powermeter';
@@ -21,8 +19,6 @@ interface RealtimeDashboardProps {
   todayKWh: number;
   todayCost: number;
   breakerCapacityA: number;
-  onInjectTestValue?: (partial: Partial<PowerMeterData>) => void;
-  onResetToDefault?: () => void;
 }
 
 export const RealtimeDashboard: React.FC<RealtimeDashboardProps> = ({
@@ -30,9 +26,7 @@ export const RealtimeDashboard: React.FC<RealtimeDashboardProps> = ({
   tariff,
   todayKWh,
   todayCost,
-  breakerCapacityA,
-  onInjectTestValue,
-  onResetToDefault,
+  breakerCapacityA
 }) => {
   // Real-time run rate per hour in Rupiah
   const hourlyRunRateRp = Math.round((data.activePower / 1000) * tariff.ratePerKWh);
@@ -456,47 +450,6 @@ export const RealtimeDashboard: React.FC<RealtimeDashboardProps> = ({
         </div>
       </div>
 
-      {/* Quick Test / Injection Bar */}
-      <div className="bg-slate-100/70 border border-slate-200/80 rounded-2xl p-4">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
-            <Sparkles className="w-4 h-4 text-emerald-600" />
-            <span className="text-xs font-bold text-slate-800">Uji Trigger Alarm & Simulasi Nilai Ekstrem:</span>
-            <span className="text-xs text-slate-500 hidden sm:inline">
-              (Uji sistem alarm tanpa menunggu gangguan listrik riil)
-            </span>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              onClick={() => onInjectTestValue?.({ voltageA: 202.4 })}
-              className="text-xs px-2.5 py-1.5 rounded-lg bg-white border border-rose-200 text-rose-700 hover:bg-rose-50 font-medium transition-colors cursor-pointer"
-            >
-              Tegangan Drop 202V
-            </button>
-            <button
-              onClick={() => onInjectTestValue?.({ currentC: 27.8 })}
-              className="text-xs px-2.5 py-1.5 rounded-lg bg-white border border-amber-200 text-amber-700 hover:bg-amber-50 font-medium transition-colors cursor-pointer"
-            >
-              Over-Current 27.8A
-            </button>
-            <button
-              onClick={() => onInjectTestValue?.({ powerFactor: 0.81, powerFactorA: 0.78 })}
-              className="text-xs px-2.5 py-1.5 rounded-lg bg-white border border-orange-200 text-orange-700 hover:bg-orange-50 font-medium transition-colors cursor-pointer"
-            >
-              Drop PF 0.81
-            </button>
-            <button
-              onClick={onResetToDefault}
-              className="text-xs px-2.5 py-1.5 rounded-lg bg-slate-200 text-slate-700 hover:bg-slate-300 font-medium transition-colors cursor-pointer flex items-center gap-1"
-              title="Reset ke data normal default"
-            >
-              <RefreshCw className="w-3 h-3" />
-              Reset Normal
-            </button>
-          </div>
-        </div>
-      </div>
     </div>
   );
 };
