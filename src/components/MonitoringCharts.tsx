@@ -30,6 +30,28 @@ function LineChart({title, unit, data, series}:{title:string;unit:string;data:Po
   </div>
 }
 
+function GaugeMetric({label,value,unit,index}:{label:string;value:string;unit:string;index:number}) {
+  const numeric=Number(value)||0;
+  const ranges = label.includes('Tegangan') ? [180,260] : label.includes('Arus') ? [0,50] : label.includes('Cos') ? [0,1] : [0,20];
+  const pct=Math.max(0,Math.min(1,(numeric-ranges[0])/(ranges[1]-ranges[0])));
+  const startX=18,startY=78,endX=102,endY=78,cx=60,cy=78,r=42;
+  const angle=Math.PI*(1-pct);
+  const nx=cx+r*Math.cos(angle), ny=cy-r*Math.sin(angle);
+  const arc=`M ${startX} ${startY} A ${r} ${r} 0 0 1 ${endX} ${endY}`;
+  const active=`M ${startX} ${startY} A ${r} ${r} 0 0 1 ${nx.toFixed(2)} ${ny.toFixed(2)}`;
+  return <div className="pow-card p-3 text-center">
+    <svg viewBox="0 0 120 88" className="w-full max-w-[135px] mx-auto">
+      <path d={arc} fill="none" stroke="currentColor" opacity=".10" strokeWidth="9" strokeLinecap="round"/>
+      <path d={active} fill="none" stroke={colors[index%4]} strokeWidth="9" strokeLinecap="round"/>
+      <line x1={cx} y1={cy} x2={nx} y2={ny} stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+      <circle cx={cx} cy={cy} r="4" fill="currentColor"/>
+      <text x="60" y="61" textAnchor="middle" fontSize="15" fontWeight="800" fill="currentColor">{value}</text>
+      <text x="60" y="73" textAnchor="middle" fontSize="7" fill="currentColor" opacity=".55">{unit}</text>
+    </svg>
+    <div className="text-[10px] sm:text-[11px] font-medium text-slate-500 dark:text-slate-400 -mt-1">{label}</div>
+  </div>
+}
+
 export function MonitoringCharts({liveData}:{liveData:PowerMeterData}) {
   const now=new Date(); const startDefault=new Date(now); startDefault.setHours(0,0,0,0);
   const [mode,setMode]=useState<'realtime'|'history'>('realtime');
@@ -75,7 +97,7 @@ export function MonitoringCharts({liveData}:{liveData:PowerMeterData}) {
         </div>
       </div>{error&&<p className="mt-3 text-sm text-rose-500">{error}</p>}
     </section>
-    <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-6 gap-3">{metrics.map((m,i)=><div key={m[0]} className="pow-card p-3 border-t-2" style={{borderTopColor:colors[i%4]}}><div className="text-[11px] text-slate-500 dark:text-slate-400">{m[0]}</div><div className="text-xl font-extrabold mt-1">{m[1]} <span className="text-xs font-medium text-slate-400">{m[2]}</span></div></div>)}</div>
+    <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-6 gap-3">{metrics.map((m,i)=><GaugeMetric key={m[0]} label={m[0]} value={m[1]} unit={m[2]} index={i}/>)}</div>
     {!data.length?<div className="pow-card p-12 text-center text-slate-500"><Zap className="w-8 h-8 mx-auto mb-3 opacity-40"/>{mode==='realtime'?'Menunggu data MQTT realtime...':'Pilih rentang tanggal lalu klik Tampilkan.'}</div>:
     <div className="grid xl:grid-cols-2 gap-4">
       <LineChart title="Daya Total" unit="kW" data={data} series={[{key:'activePower',label:'Daya Total',color:colors[0],divisor:1000}]}/>
