@@ -17,6 +17,9 @@ const MQTT_TOPIC = process.env.MQTT_TOPIC || 'andrian/powermeter/data';
 const MQTT_CLIENT_ID_PREFIX = process.env.MQTT_CLIENT_ID || 'powmon_server';
 const MQTT_CLIENT_ID = `${MQTT_CLIENT_ID_PREFIX}_${process.pid}_${Math.random().toString(16).slice(2, 8)}`;
 const SAVE_INTERVAL_MS = Number(process.env.SAVE_INTERVAL_MS || 300000);
+const MQTT_WATCHDOG_INTERVAL_MS = 15000;
+const MQTT_STALE_TIMEOUT_MS = Math.max(60000, Number(process.env.MQTT_STALE_TIMEOUT_MS || 90000));
+const MQTT_RECOVERY_COOLDOWN_MS = 120000;
 
 if (!MONGODB_URI) {
   console.error('FATAL: MONGODB_URI belum diatur.');
@@ -36,6 +39,11 @@ let lastSavedAt = null;
 let lastSaveError = null;
 let packetCount = 0;
 let saveCount = 0;
+let mqttConnectedAt = null;
+let mqttSubscribed = false;
+let mqttRecoveryCount = 0;
+let lastMqttRecoveryAt = null;
+let lastMqttRecoveryReason = null;
 let energyState = { dateKey: null, totalKWh: 0, phaseRKWh: 0, phaseSKWh: 0, phaseTKWh: 0, lastSampleAt: null, lastSample: null };
 
 function sanitizeTelemetry(parsed) {
@@ -112,7 +120,7 @@ function accumulateEnergy(sample, now = new Date()) {
 }
 
 function connectMqtt() {
-  mqttClient = mqtt.connect(MQTT_BROKER_URL, {
+  const client = mqtt.connect(MQTT_BROKER_URL, {
     clientId: MQTT_CLIENT_ID,
     clean: true,
     keepalive: 30,
@@ -120,17 +128,26 @@ function connectMqtt() {
     reconnectPeriod: 3000,
     resubscribe: true,
   });
+  mqttClient = client;
+  mqttSubscribed = false;
+  mqttConnectedAt = null;
 
-  mqttClient.on('connect', () => {
+  client.on('connect', () => {
+    if (mqttClient !== client) return;
+    mqttConnectedAt = new Date();
+    mqttSubscribed = false;
     console.log(`[MQTT] Connected: ${MQTT_BROKER_URL}`);
-    mqttClient.subscribe(MQTT_TOPIC, { qos: 0 }, (error) => {
-      if (error) console.error('[MQTT] Subscribe failed:', error);
+    client.subscribe(MQTT_TOPIC, { qos: 0 }, (error, granted) => {
+      if (mqttClient !== client) return;
+      const accepted = !error && granted?.some((entry) => entry.topic === MQTT_TOPIC && entry.qos !== 128);
+      mqttSubscribed = Boolean(accepted);
+      if (!accepted) console.error('[MQTT] Subscribe failed:', error?.message || 'Subscription rejected');
       else console.log(`[MQTT] Subscribed: ${MQTT_TOPIC}`);
     });
   });
 
-  mqttClient.on('message', (topic, payload) => {
-    if (topic !== MQTT_TOPIC) return;
+  client.on('message', (topic, payload) => {
+    if (mqttClient !== client || topic !== MQTT_TOPIC) return;
     try {
       const parsed = JSON.parse(payload.toString());
       latestData = sanitizeTelemetry(parsed);
@@ -142,11 +159,48 @@ function connectMqtt() {
     }
   });
 
-  mqttClient.on('reconnect', () => console.log('[MQTT] Reconnecting...'));
-  mqttClient.on('offline', () => console.log('[MQTT] Client offline'));
-  mqttClient.on('close', () => console.log('[MQTT] Connection closed'));
-  mqttClient.on('error', (error) => console.error('[MQTT] Error:', error.message));
+  client.on('reconnect', () => console.log('[MQTT] Reconnecting...'));
+  client.on('offline', () => { if (mqttClient === client) mqttSubscribed = false; console.log('[MQTT] Client offline'); });
+  client.on('close', () => { if (mqttClient === client) mqttSubscribed = false; console.log('[MQTT] Connection closed'); });
+  client.on('error', (error) => console.error('[MQTT] Error:', error.message));
 }
+
+function recoverMqtt(reason) {
+  const now = Date.now();
+  if (lastMqttRecoveryAt && now - lastMqttRecoveryAt.getTime() < MQTT_RECOVERY_COOLDOWN_MS) return;
+  lastMqttRecoveryAt = new Date(now);
+  lastMqttRecoveryReason = reason;
+  mqttRecoveryCount += 1;
+  console.warn(`[MQTT] Watchdog recovery #${mqttRecoveryCount}: ${reason}`);
+  const previous = mqttClient;
+  mqttClient = null;
+  mqttSubscribed = false;
+  try { previous?.end(true); } catch (error) { console.error('[MQTT] Old client cleanup failed:', error); }
+  connectMqtt();
+}
+
+function checkMqttHealth() {
+  if (!mqttClient) return recoverMqtt('client missing');
+  const now = Date.now();
+  // MQTT.js normally retries disconnected sockets itself. Only intervene if it stays
+  // disconnected for a sustained period after the last recovery/startup.
+  const reference = lastMqttRecoveryAt?.getTime() || mqttWatchdogStartedAt;
+  if (!mqttClient.connected) {
+    if (now - reference >= MQTT_STALE_TIMEOUT_MS) recoverMqtt('broker connection unavailable');
+    return;
+  }
+  const sinceConnect = mqttConnectedAt?.getTime() || now;
+  if (!mqttSubscribed && now - sinceConnect >= MQTT_STALE_TIMEOUT_MS) {
+    recoverMqtt('subscription not acknowledged');
+    return;
+  }
+  // Avoid restarting a healthy MQTT connection merely because the ESP32 is offline.
+  // A missing publisher cannot be repaired by reconnecting the subscriber.
+  if (mqttSubscribed && lastMqttAt && now - lastMqttAt.getTime() >= MQTT_STALE_TIMEOUT_MS) {
+    console.warn('[MQTT] Telemetry stale: publisher may be offline; MQTT connection remains established');
+  }
+}
+const mqttWatchdogStartedAt = Date.now();
 
 function jakartaDateKey(date = new Date()) {
   return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Jakarta', year: 'numeric', month: '2-digit', day: '2-digit' }).format(date);
@@ -212,6 +266,10 @@ app.get('/api/health', (_req, res) => {
       topic: MQTT_TOPIC,
       packetCount,
       lastMessageAt: lastMqttAt,
+      subscribed: mqttSubscribed,
+      recoveryCount: mqttRecoveryCount,
+      lastRecoveryAt: lastMqttRecoveryAt,
+      lastRecoveryReason: lastMqttRecoveryReason,
     },
     mongodb: {
       connected: mongoConnected,
@@ -365,6 +423,7 @@ async function start() {
   await connectMongo();
   await restoreEnergyState();
   connectMqtt();
+  setInterval(checkMqttHealth, MQTT_WATCHDOG_INTERVAL_MS);
 
   setInterval(() => {
     saveLatestTelemetry().catch((error) => console.error('[Collector] Interval error:', error));
